@@ -1,0 +1,116 @@
+#include <CapacitiveSensor.h>
+
+/* NOTES ABOUT SKETCH:
+ * Code to support a CV/Gate control surface with: 
+ * - two 'trigger' controls (X/Y) and one mono output for each
+ * - two 'cv level' controls (A/B) and one mono output for each
+ * -- 'high' level cv is good around ~4.5V (wobble bug peaks 9V)
+ *
+ * Sliders (A & B): 
+ * - Sets external CV of 0V to 4V (?) based on finger position (gradient)
+ * - Maintains level of A/B when removing finger
+ * - Indicates level of A/B sliders via A/B LED brightness
+ * 
+ * Gates (X & Y):
+ * - Sets external CV: 0V or 4V (on-off) based on whether or not finger is touching pad
+ * 
+ * TODO:
+ * - Check wiring to make sure there isn't an issue leading to why multiple sensors are being triggered when sharing send pin
+ * - Update pins so that PWM pins can be used with Variable brightness LEDs
+ * - buy DAC chips
+ * - Add code to "maintain" values when finger leaves on A & B sensors
+ * 
+ * NOTES ABOUT CapacitiveSensor:
+ * Uses a high value resistor e.g. 10 megohm between send pin and receive pin
+ * Resistor effects sensitivity, experiment with values, 50 kilohm - 50 megohm. Larger resistor values yield larger sensor values.
+ * Receive pin is the sensor pin - try different amounts of foil/metal on this pin
+ * Best results are obtained if sensor foil and wire is covered with an insulator such as paper or plastic sheet
+ */
+
+
+CapacitiveSensor   cs_x = CapacitiveSensor(2,4);        // 500K resistor between pins 2 & 4, pin 4 is sensor pin, add wire, foil
+//CapacitiveSensor   cs_y = CapacitiveSensor(2,5);      // 500K resistor between pins 2 & 5, pin 5 is sensor pin, add wire, foil
+CapacitiveSensor   cs_a = CapacitiveSensor(3,7);        // 500K resistor between pins 3 & 6, pin 6 is sensor pin, add wire, foil
+//CapacitiveSensor   cs_b = CapacitiveSensor(3,7);      // 500K resistor between pins 3 & 7, pin 7 is sensor pin
+
+//Define LED Variables
+const int ledPin = 6;           // the PWM pin the LED is attached to
+int brightness = 0;             // how bright the LED is. Should be between 0 - 255
+
+//Define Smoothing Variables
+const int numReadings = 10;
+int readings[numReadings];      // array of the readings from the analog input
+int readIndex = 0;              // the index of the current reading
+int total = 0;                  // the running total
+int average_sensor_A = 0;                // the average
+
+void setup()                    
+{
+  // declare pin 9 to be an output:
+  pinMode(ledPin, OUTPUT);
+
+  //cs_x.set_CS_AutocaL_Millis(0xFFFFFFFF);     // turn off autocalibrate on channel x - just as an example
+  Serial.begin(9600);
+
+   //Smoothing - initialize all the readings to 0:
+  for (int thisReading = 0; thisReading < numReadings; thisReading++) {
+    readings[thisReading] = 0;
+  }
+
+}
+
+void loop()                    
+{
+    //Define CapSense variables and readings  
+    long start = millis();
+    long total_x =  cs_x.capacitiveSensor(30);
+    //long total_y =  cs_y.capacitiveSensor(30);
+    long total_a =  cs_a.capacitiveSensor(30);
+    //long total_b =  cs_b.capacitiveSensor(30);
+
+    //***Start Smoothing Code
+    // subtract the last reading:
+    total = total - readings[readIndex];
+    // read from the sensor:
+    readings[readIndex] = total_a;
+    // add the reading to the total:
+    total = total + readings[readIndex];
+    // advance to the next position in the array:
+    readIndex = readIndex + 1;
+
+    // if we're at the end of the array...
+    if (readIndex >= numReadings) {
+      // ...wrap around to the beginning:
+      readIndex = 0;
+    }
+    // calculate the average:
+    average_sensor_A = total / numReadings;
+    //***End Smoothing Code
+
+    Serial.print("Millis = ");
+    Serial.print(millis() - start);      // check on performance in milliseconds
+    Serial.print("\t");
+    Serial.print("X Touch = ");
+    Serial.print(total_x);                // print sensor X
+    Serial.print("\t");
+    //Serial.print(total_y);              // print sensor Y
+    Serial.print("\t");
+    Serial.print("A Touch = ");
+    Serial.print(average_sensor_A);                // print sensor A
+    Serial.println("\t");
+    //Serial.println(total_b); 
+
+    brightness = map(total_a, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright 
+    
+    if (brightness < 5) {
+      brightness = 0;
+    }
+    
+    analogWrite(ledPin, brightness);
+    
+    Serial.print("Brightness = ");
+    Serial.print(brightness);                // print brightness
+    Serial.println("\t");
+
+    delay(100);                             // arbitrary delay to limit data to serial port 
+}
