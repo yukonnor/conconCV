@@ -39,10 +39,14 @@ int brightness = 0;             // how bright the LED is. Should be between 0 - 
 
 //Define Smoothing Variables
 const int numReadings = 10;
-int readings[numReadings];      // array of the readings from the analog input
-int readIndex = 0;              // the index of the current reading
-int total = 0;                  // the running total
-int average_reading = 0;        // the average
+int readings_a[numReadings];      // array of the readings from the analog input
+int readings_b[numReadings]; 
+int readIndex_a = 0;              // the index of the current reading
+int readIndex_b = 0;
+int total_a = 0;                  // the running total
+int total_b = 0; 
+int average_reading_a = 0;        // the average
+int average_reading_b = 0; 
 
 void setup()                    
 {
@@ -54,7 +58,11 @@ void setup()
 
    //Smoothing - initialize all the readings to 0:
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {
-      readings[thisReading] = 0;
+      readings_a[thisReading] = 0;
+  }
+  
+  for (int thisReading = 0; thisReading < numReadings; thisReading++) {
+      readings_b[thisReading] = 0;
   }
 
 }
@@ -63,33 +71,34 @@ void loop()
 {
     //Define CapSense variables and readings  
     long start = millis();
-    long total_x =  cs_x.capacitiveSensor(30);
-    long total_y =  cs_y.capacitiveSensor(30);
-    long total_a =  cs_a.capacitiveSensor(30);
-    //long total_b =  cs_b.capacitiveSensor(30);
+    long cap_reading_x =  cs_x.capacitiveSensor(30);
+    long cap_reading_y =  cs_y.capacitiveSensor(30);
+    long cap_reading_a =  cs_a.capacitiveSensor(30);
+    //long cap_reading_b =  cs_b.capacitiveSensor(30);
 
     //Smooth A & B Values
-    total_a = Smooth(total_a); //A reading is now smoothed
+    cap_reading_a = Smooth_A(cap_reading_a); //A reading is now smoothed
+    //cap_reading_b = Smooth_B(cap_reading_b); //B reading is now smoothed
 
     //Logic for X & Y On Off
-    total_x = On_Off_Threshold(total_x, 140); //if x is > 140, it is HIGH
-    total_y = On_Off_Threshold(total_y, 140);
+    cap_reading_x = On_Off_Threshold(cap_reading_x, 140); //if x is > 140, it is HIGH
+    cap_reading_y = On_Off_Threshold(cap_reading_y, 140); 
 
     Serial.print("Millis = ");
-    Serial.print(millis() - start);      // check on performance in milliseconds
+    Serial.print(millis() - start);     // check on performance in milliseconds
     Serial.print("\t");
     Serial.print("X Touch = ");
-    Serial.print(total_x);                // print sensor X
+    Serial.print(cap_reading_x);              // print sensor X
     Serial.print("\t");
     Serial.print("Y Touch = ");
-    Serial.print(total_y);              // print sensor Y
+    Serial.print(cap_reading_y);              // print sensor Y
     Serial.print("\t");
     Serial.print("A Touch = ");
-    Serial.print(total_a);                // print sensor A
+    Serial.print(cap_reading_a);              // print sensor A
     Serial.println("\t");
-    //Serial.println(total_b); 
+    //Serial.println(cap_reading_b); 
 
-    brightness = map(total_a, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright 
+    brightness = map(cap_reading_a, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright 
     
     if (brightness < 5) {
       brightness = 0;
@@ -105,29 +114,53 @@ void loop()
 } //end Loop
 
 
-int Smooth(int dirty_reading) {
+int Smooth_A(int dirty_reading) {
   //Be sure to include global variables and intializer in setup()
   
   // subtract the last reading:
-  total = total - readings[readIndex];
+  total_a = total_a - readings_a[readIndex_a];
   // read from the sensor:
-  readings[readIndex] = dirty_reading;
+  readings_a[readIndex_a] = dirty_reading;
   // add the reading to the total:
-  total = total + readings[readIndex];
+  total_a = total_a + readings_a[readIndex_a];
   // advance to the next position in the array:
-  readIndex = readIndex + 1;
+  readIndex_a = readIndex_a + 1;
 
   // if we're at the end of the array...
-  if (readIndex >= numReadings) {
+  if (readIndex_a >= numReadings) {
     // ...wrap around to the beginning:
-    readIndex = 0;
+    readIndex_a = 0;
     }
   // calculate the average:
-  average_reading = total / numReadings;
+  average_reading_a = total_a / numReadings;
 
-  return average_reading;
+  return average_reading_a;
 
-} //end Smooth 
+} //end Smooth_A 
+
+int Smooth_B(int dirty_reading) {
+  //Be sure to include global variables and intializer in setup()
+  
+  // subtract the last reading:
+  total_b = total_b - readings_b[readIndex_b];
+  // read from the sensor:
+  readings_b[readIndex_b] = dirty_reading;
+  // add the reading to the total:
+  total_b = total_b + readings_b[readIndex_b];
+  // advance to the next position in the array:
+  readIndex_b = readIndex_b + 1;
+
+  // if we're at the end of the array...
+  if (readIndex_b >= numReadings) {
+    // ...wrap around to the beginning:
+    readIndex_b = 0;
+    }
+  // calculate the average:
+  average_reading_b = total_b / numReadings;
+
+  return average_reading_b;
+
+} //end Smooth_A 
 
 
 boolean On_Off_Threshold(int on_off, int threshold) {
