@@ -28,10 +28,10 @@
  */
 
 
-CapacitiveSensor   cs_x = CapacitiveSensor(2,4);        // 500K resistor between pins 2 & 4, pin 4 is sensor pin, add wire, foil
-//CapacitiveSensor   cs_y = CapacitiveSensor(2,5);      // 500K resistor between pins 2 & 5, pin 5 is sensor pin, add wire, foil
-CapacitiveSensor   cs_a = CapacitiveSensor(3,7);        // 500K resistor between pins 3 & 6, pin 6 is sensor pin, add wire, foil
-//CapacitiveSensor   cs_b = CapacitiveSensor(3,7);      // 500K resistor between pins 3 & 7, pin 7 is sensor pin
+CapacitiveSensor   cs_x = CapacitiveSensor(2,4);        // 470K resistor between pins 2 & 4, pin 4 is sensor pin, add wire, foil
+CapacitiveSensor   cs_y = CapacitiveSensor(2,5);        // 470K resistor between pins 2 & 5, pin 5 is sensor pin, add wire, foil
+CapacitiveSensor   cs_a = CapacitiveSensor(3,7);        // 470K resistor between pins 3 & 6, pin 6 is sensor pin, add wire, foil
+//CapacitiveSensor   cs_b = CapacitiveSensor(3,7);      // 470K resistor between pins 3 & 7, pin 7 is sensor pin
 
 //Define LED Variables
 const int ledPin = 6;           // the PWM pin the LED is attached to
@@ -42,7 +42,7 @@ const int numReadings = 10;
 int readings[numReadings];      // array of the readings from the analog input
 int readIndex = 0;              // the index of the current reading
 int total = 0;                  // the running total
-int average_sensor_A = 0;                // the average
+int average_reading = 0;        // the average
 
 void setup()                    
 {
@@ -54,7 +54,7 @@ void setup()
 
    //Smoothing - initialize all the readings to 0:
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {
-    readings[thisReading] = 0;
+      readings[thisReading] = 0;
   }
 
 }
@@ -64,28 +64,16 @@ void loop()
     //Define CapSense variables and readings  
     long start = millis();
     long total_x =  cs_x.capacitiveSensor(30);
-    //long total_y =  cs_y.capacitiveSensor(30);
+    long total_y =  cs_y.capacitiveSensor(30);
     long total_a =  cs_a.capacitiveSensor(30);
     //long total_b =  cs_b.capacitiveSensor(30);
 
-    //***Start Smoothing Code
-    // subtract the last reading:
-    total = total - readings[readIndex];
-    // read from the sensor:
-    readings[readIndex] = total_a;
-    // add the reading to the total:
-    total = total + readings[readIndex];
-    // advance to the next position in the array:
-    readIndex = readIndex + 1;
+    //Smooth A & B Values
+    total_a = Smooth(total_a); //A reading is now smoothed
 
-    // if we're at the end of the array...
-    if (readIndex >= numReadings) {
-      // ...wrap around to the beginning:
-      readIndex = 0;
-    }
-    // calculate the average:
-    average_sensor_A = total / numReadings;
-    //***End Smoothing Code
+    //Logic for X & Y On Off
+    total_x = On_Off_Threshold(total_x, 140); //if x is > 140, it is HIGH
+    total_y = On_Off_Threshold(total_y, 140);
 
     Serial.print("Millis = ");
     Serial.print(millis() - start);      // check on performance in milliseconds
@@ -93,10 +81,11 @@ void loop()
     Serial.print("X Touch = ");
     Serial.print(total_x);                // print sensor X
     Serial.print("\t");
-    //Serial.print(total_y);              // print sensor Y
+    Serial.print("Y Touch = ");
+    Serial.print(total_y);              // print sensor Y
     Serial.print("\t");
     Serial.print("A Touch = ");
-    Serial.print(average_sensor_A);                // print sensor A
+    Serial.print(total_a);                // print sensor A
     Serial.println("\t");
     //Serial.println(total_b); 
 
@@ -113,4 +102,42 @@ void loop()
     Serial.println("\t");
 
     delay(100);                             // arbitrary delay to limit data to serial port 
+} //end Loop
+
+
+int Smooth(int dirty_reading) {
+  //Be sure to include global variables and intializer in setup()
+  
+  // subtract the last reading:
+  total = total - readings[readIndex];
+  // read from the sensor:
+  readings[readIndex] = dirty_reading;
+  // add the reading to the total:
+  total = total + readings[readIndex];
+  // advance to the next position in the array:
+  readIndex = readIndex + 1;
+
+  // if we're at the end of the array...
+  if (readIndex >= numReadings) {
+    // ...wrap around to the beginning:
+    readIndex = 0;
+    }
+  // calculate the average:
+  average_reading = total / numReadings;
+
+  return average_reading;
+
+} //end Smooth 
+
+
+boolean On_Off_Threshold(int on_off, int threshold) {
+
+      if (on_off < threshold){
+        on_off = LOW;
+        }
+        else {
+        on_off = HIGH;  
+        }
+
+      return on_off;  
 }
