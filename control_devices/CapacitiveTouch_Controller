@@ -15,9 +15,8 @@
  * - Sets external CV: 0V or 4V (on-off) based on whether or not finger is touching pad
  * 
  * TODO:
- * - Check wiring to make sure there isn't an issue leading to why multiple sensors are being triggered when sharing send pin
- * - Update pins so that PWM pins can be used with Variable brightness LEDs
- * - buy DAC chips
+ * - Understand DAC chips coding & I2C
+ * - Prevent bleeding between A & B (b is bleeding to a, a IS NOT bleeding to b)
  * - Add code to "maintain" values when finger leaves on A & B sensors
  * 
  * NOTES ABOUT CapacitiveSensor:
@@ -28,14 +27,16 @@
  */
 
 
-CapacitiveSensor   cs_x = CapacitiveSensor(2,4);        // 470K resistor between pins 2 & 4, pin 4 is sensor pin, add wire, foil
-CapacitiveSensor   cs_y = CapacitiveSensor(2,5);        // 470K resistor between pins 2 & 5, pin 5 is sensor pin, add wire, foil
-CapacitiveSensor   cs_a = CapacitiveSensor(3,7);        // 470K resistor between pins 3 & 6, pin 6 is sensor pin, add wire, foil
-//CapacitiveSensor   cs_b = CapacitiveSensor(3,7);      // 470K resistor between pins 3 & 7, pin 7 is sensor pin
+CapacitiveSensor   cs_x = CapacitiveSensor(2,3);        // 470K resistor between pins 2 & 4, pin 4 is sensor pin, add wire, foil
+CapacitiveSensor   cs_y = CapacitiveSensor(2,4);        // 470K resistor between pins 2 & 5, pin 5 is sensor pin, add wire, foil
+CapacitiveSensor   cs_a = CapacitiveSensor(5,6);        // 470K resistor between pins 3 & 6, pin 6 is sensor pin, add wire, foil
+CapacitiveSensor   cs_b = CapacitiveSensor(5,7);      // 470K resistor between pins 3 & 7, pin 7 is sensor pin
 
 //Define LED Variables
-const int ledPin = 6;           // the PWM pin the LED is attached to
-int brightness = 0;             // how bright the LED is. Should be between 0 - 255
+const int ledPin_A = 9;         // the PWM pin the LED for A is attached to
+const int ledPin_B = 10;        // the PWM pin the LED for A is attached to
+int brightness_A = 0;           //  how bright the LED for A is. Should be between 0 - 255
+int brightness_B = 0;  
 
 //Define Smoothing Variables
 const int numReadings = 10;
@@ -50,11 +51,9 @@ int average_reading_b = 0;
 
 void setup()                    
 {
-  // declare pin 9 to be an output:
-  pinMode(ledPin, OUTPUT);
-
-  //cs_x.set_CS_AutocaL_Millis(0xFFFFFFFF);     // turn off autocalibrate on channel x - just as an example
-  Serial.begin(9600);
+  // declare LED pins to be outputs:
+  pinMode(ledPin_A, OUTPUT);
+  pinMode(ledPin_B, OUTPUT);
 
    //Smoothing - initialize all the readings to 0:
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {
@@ -65,6 +64,9 @@ void setup()
       readings_b[thisReading] = 0;
   }
 
+  //Serial baby
+  Serial.begin(9600);
+
 }
 
 void loop()                    
@@ -74,18 +76,32 @@ void loop()
     long cap_reading_x =  cs_x.capacitiveSensor(30);
     long cap_reading_y =  cs_y.capacitiveSensor(30);
     long cap_reading_a =  cs_a.capacitiveSensor(30);
-    //long cap_reading_b =  cs_b.capacitiveSensor(30);
+    long cap_reading_b =  cs_b.capacitiveSensor(30);
 
     //Smooth A & B Values
     cap_reading_a = Smooth_A(cap_reading_a); //A reading is now smoothed
-    //cap_reading_b = Smooth_B(cap_reading_b); //B reading is now smoothed
+    cap_reading_b = Smooth_B(cap_reading_b); //B reading is now smoothed
 
     //Logic for X & Y On Off
-    cap_reading_x = On_Off_Threshold(cap_reading_x, 140); //if x is > 140, it is HIGH
+    cap_reading_x = On_Off_Threshold(cap_reading_x, 140); //if x is > 140, it is HIGH. Else LOW.
     cap_reading_y = On_Off_Threshold(cap_reading_y, 140); 
 
-    Serial.print("Millis = ");
-    Serial.print(millis() - start);     // check on performance in milliseconds
+    //light up those LEDs!
+    brightness_A = map(cap_reading_a, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright  
+    if (brightness_A < 5) {
+      brightness_A = 0;
+    }
+    analogWrite(ledPin_A, brightness_A);
+
+    brightness_B = map(cap_reading_b, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright  
+    if (brightness_B < 5) {
+      brightness_B = 0;
+    }
+    analogWrite(ledPin_A, brightness_A);
+    analogWrite(ledPin_B, brightness_B);
+
+    //Serial.print("Millis = ");
+    //Serial.print(millis() - start);           // check on performance in milliseconds
     Serial.print("\t");
     Serial.print("X Touch = ");
     Serial.print(cap_reading_x);              // print sensor X
@@ -95,19 +111,15 @@ void loop()
     Serial.print("\t");
     Serial.print("A Touch = ");
     Serial.print(cap_reading_a);              // print sensor A
-    Serial.println("\t");
-    //Serial.println(cap_reading_b); 
-
-    brightness = map(cap_reading_a, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright 
-    
-    if (brightness < 5) {
-      brightness = 0;
-    }
-    
-    analogWrite(ledPin, brightness);
-    
-    Serial.print("Brightness = ");
-    Serial.print(brightness);                // print brightness
+    Serial.print("\t");
+    Serial.print("Brightness A = ");
+    Serial.print(brightness_A);               // print brightness
+    Serial.print("\t");
+    Serial.print("B Touch = ");
+    Serial.print(cap_reading_b);              // print sensor B
+    Serial.print("\t");
+    Serial.print("Brightness B = ");
+    Serial.print(brightness_B);
     Serial.println("\t");
 
     delay(100);                             // arbitrary delay to limit data to serial port 
