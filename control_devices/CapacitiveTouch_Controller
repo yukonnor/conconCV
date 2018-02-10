@@ -1,5 +1,3 @@
-#include <CapacitiveSensor.h>
-
 /* NOTES ABOUT SKETCH:
  * Code to support a CV/Gate control surface with: 
  * - two 'trigger' controls (X/Y) and one mono output for each
@@ -15,8 +13,7 @@
  * - Sets external CV: 0V or 4V (on-off) based on whether or not finger is touching pad
  * 
  * TODO:
- * - Understand DAC chips coding & I2C
- * - Prevent bleeding between A & B (b is bleeding to a, a IS NOT bleeding to b)
+ * - Prevent bleeding between A & B (b is bleeding to a, a IS NOT bleeding to b). Maybe try to decrease B resistor value?
  * - Add code to "maintain" values when finger leaves on A & B sensors
  * 
  * NOTES ABOUT CapacitiveSensor:
@@ -25,12 +22,18 @@
  * Receive pin is the sensor pin - try different amounts of foil/metal on this pin
  * Best results are obtained if sensor foil and wire is covered with an insulator such as paper or plastic sheet
  */
+#include <Wire.h> //I2C for DACs
+#include <Adafruit_MCP4725.h> //I2C for DACs
+#include <CapacitiveSensor.h>
+
+Adafruit_MCP4725 dac; //rename library
+#define DAC_RESOLUTION    (8) //8-bit resolution
 
 
 CapacitiveSensor   cs_x = CapacitiveSensor(2,3);        // 470K resistor between pins 2 & 4, pin 4 is sensor pin, add wire, foil
 CapacitiveSensor   cs_y = CapacitiveSensor(2,4);        // 470K resistor between pins 2 & 5, pin 5 is sensor pin, add wire, foil
-CapacitiveSensor   cs_a = CapacitiveSensor(5,6);        // 470K resistor between pins 3 & 6, pin 6 is sensor pin, add wire, foil
-CapacitiveSensor   cs_b = CapacitiveSensor(5,7);      // 470K resistor between pins 3 & 7, pin 7 is sensor pin
+CapacitiveSensor   cs_a = CapacitiveSensor(5,6);        // 470K resistor between pins 5 & 6, pin 6 is sensor pin, add wire, foil
+CapacitiveSensor   cs_b = CapacitiveSensor(8,7);      // 470K resistor between pins 8 & 7, pin 7 is sensor pin
 
 //Define LED Variables
 const int ledPin_A = 9;         // the PWM pin the LED for A is attached to
@@ -67,17 +70,23 @@ void setup()
   //Serial baby
   Serial.begin(9600);
 
+  dac.begin(0x60);
+  dac.setVoltage(0,false);
+  
+  dac.begin(0x61);
+  dac.setVoltage(0,false);
+
 }
 
 void loop()                    
 {
     //Define CapSense variables and readings  
     long start = millis();
-    long cap_reading_x =  cs_x.capacitiveSensor(30);
-    long cap_reading_y =  cs_y.capacitiveSensor(30);
-    long cap_reading_a =  cs_a.capacitiveSensor(30);
-    long cap_reading_b =  cs_b.capacitiveSensor(30);
-
+    long cap_reading_x =  cs_x.capacitiveSensor(30); //on-off based on logic below
+    long cap_reading_y =  cs_y.capacitiveSensor(30); //on-off based on logic below
+    long cap_reading_a =  cs_a.capacitiveSensor(30); //0 - 600 with 470K resistor
+    long cap_reading_b =  cs_b.capacitiveSensor(30); //0 - 680 with 470K resistor (maybe try to decrease?)
+    
     //Smooth A & B Values
     cap_reading_a = Smooth_A(cap_reading_a); //A reading is now smoothed
     cap_reading_b = Smooth_B(cap_reading_b); //B reading is now smoothed
@@ -86,19 +95,7 @@ void loop()
     cap_reading_x = On_Off_Threshold(cap_reading_x, 140); //if x is > 140, it is HIGH. Else LOW.
     cap_reading_y = On_Off_Threshold(cap_reading_y, 140); 
 
-    //light up those LEDs!
-    brightness_A = map(cap_reading_a, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright  
-    if (brightness_A < 5) {
-      brightness_A = 0;
-    }
-    analogWrite(ledPin_A, brightness_A);
 
-    brightness_B = map(cap_reading_b, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright  
-    if (brightness_B < 5) {
-      brightness_B = 0;
-    }
-    analogWrite(ledPin_A, brightness_A);
-    analogWrite(ledPin_B, brightness_B);
 
     //Serial.print("Millis = ");
     //Serial.print(millis() - start);           // check on performance in milliseconds
@@ -123,6 +120,34 @@ void loop()
     Serial.println("\t");
 
     delay(100);                             // arbitrary delay to limit data to serial port 
+
+    //SET THOSE DAC OUTPUT VALUES!
+    
+    //First Map Cap Readings to DAC Input values
+    //0V Output = 0 - 5V Output = 4095
+    unsigned int dac_0_out = map(cap_reading_a, 0, 800, 0, 4095);  
+    unsigned int dac_1_out = map(cap_reading_b, 0, 800, 0, 4095); 
+    
+    dac.begin(0x60);
+    dac.setVoltage(dac_0_out, false);
+    dac.begin(0x61);
+    dac.setVoltage(dac_1_out, false);
+    //END DACs
+
+    //light up those LEDs!
+    brightness_A = map(cap_reading_a, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright  
+    if (brightness_A < 5) {
+      brightness_A = 0;
+    }
+
+    brightness_B = map(cap_reading_b, 0, 800, 0, 150); //map the captouch A to led's brightness. 0 off, 255 max bright  
+    if (brightness_B < 5) {
+      brightness_B = 0;
+    }
+    analogWrite(ledPin_A, brightness_A);
+    analogWrite(ledPin_B, brightness_B);
+    // end LEDS
+    
 } //end Loop
 
 
