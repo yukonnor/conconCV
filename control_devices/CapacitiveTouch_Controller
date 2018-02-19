@@ -10,11 +10,18 @@
  * - Indicates level of A/B sliders via A/B LED brightness
  * 
  * Gates (X & Y):
- * - Sets external CV: 0V or 4V (on-off) based on whether or not finger is touching pad
+ * - Sets external CV: 0V or 4.8V (on-off) based on whether or not finger is touching pad
  * 
  * TODO:
- * - Prevent bleeding between A & B (b is bleeding to a, a IS NOT bleeding to b). Maybe try to decrease B resistor value?
- * - Add code to "maintain" values when finger leaves on A & B sensors
+ * - Add code to "maintain" values when finger leaves on A & B sensors OR use sample and hold button
+ * - debounce S&H button
+ * - add one more sample button (one for A one for B)
+ * - add EGs for A & B (slow the release down...even after releasing the sample)
+ * - add optional EG for 'y' gate (using PWM?)
+ * - ergonimics
+ * - solder protoboard of what's currently breadboarded
+ * - figue out case design
+ * 
  * 
  * NOTES ABOUT CapacitiveSensor:
  * Uses a high value resistor e.g. 10 megohm between send pin and receive pin
@@ -44,6 +51,15 @@ int brightness_B = 0;
 const int xPin = 12;
 const int yPin = 13;
 
+const int button1Pin = 0;
+int button1 = 0;
+int buttonState1 = 0; //0 if off, 1 is on
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
+
+unsigned int dac_0_out = 0;
+unsigned int dac_1_out = 0;
+
 //Define Smoothing Variables
 const int numReadings = 10;
 int readings_a[numReadings];      // array of the readings from the analog input
@@ -62,8 +78,9 @@ void setup()
   pinMode(ledPin_B, OUTPUT);
   pinMode(xPin, OUTPUT);
   pinMode(yPin, OUTPUT);
+  pinMode(button1Pin, INPUT_PULLUP);
 
-   //Smoothing - initialize all the readings to 0:
+  //Smoothing - initialize all the readings to 0:
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {
       readings_a[thisReading] = 0;
   }
@@ -72,12 +89,10 @@ void setup()
       readings_b[thisReading] = 0;
   }
 
-  //Serial baby
   Serial.begin(9600);
 
   dac.begin(0x60);
   dac.setVoltage(0,false);
-  
   dac.begin(0x61);
   dac.setVoltage(0,false);
 
@@ -91,18 +106,86 @@ void loop()
     long cap_reading_y =  cs_y.capacitiveSensor(30); //on-off based on logic below
     long cap_reading_a =  cs_a.capacitiveSensor(30); //0 - 600 with 470K resistor
     long cap_reading_b =  cs_b.capacitiveSensor(30); //0 - 680 with 470K resistor (maybe try to decrease?)
-    
+
     //Smooth A & B Values
     cap_reading_a = Smooth_A(cap_reading_a); //A reading is now smoothed
     cap_reading_b = Smooth_B(cap_reading_b); //B reading is now smoothed
+    cap_reading_b = max(cap_reading_b, 35);
 
     //Logic for X & Y On Off
     cap_reading_x = On_Off_Threshold(cap_reading_x, 140); //if x is > 140, it is HIGH. Else LOW.
     cap_reading_y = On_Off_Threshold(cap_reading_y, 140); 
 
+    //if S&H button off, set dac values to run live
+    //if S&H button on, set dac value to last value read
+    int buttonRead1 = digitalRead(button1Pin); 
+    //if off and pressed, turn on
+    if (buttonRead1 == LOW && buttonState1 == 0 &&((millis() - lastDebounceTime) > debounceDelay)) {
+        buttonState1 = 1;
+        lastDebounceTime = millis();
+       }
+       else if (buttonRead1 == LOW && buttonState1 == 1 && ((millis() - lastDebounceTime) > debounceDelay)){
+        buttonState1 = 0;
+        lastDebounceTime = millis();
+       }
+    
 
+    if (buttonState1 == 0) { //if S&H off, samle continually!
+    //SET THOSE DAC OUTPUT VALUES!
+    //First Map Cap Readings to DAC Input values
+    //0V Output = 0 - 5V Output = 4095
+    dac_0_out = map(cap_reading_a, 0, 400, 0, 4095);  
+    dac_1_out = map(cap_reading_b, 35, 400, 0, 4095); 
+    dac_0_out = min(dac_0_out, 4095); //make sure dacs don't go above 4095
+    dac_1_out = min(dac_1_out, 4095);
+
+    brightness_A = map(cap_reading_a, 0, 400, 0, 200); //map the captouch A to led's brightness. 0 off, 255 max bright  
+    if (brightness_A < 5) {
+      brightness_A = 0;
+       }
+
+    brightness_B = map(cap_reading_b, 35, 400, 0, 200); //map the captouch A to led's brightness. 0 off, 255 max bright  
+    if (brightness_B < 5) {
+      brightness_B = 0;
+      }
+    }
+
+    if (buttonState1 == 1) { //if S&H on, keep at current values
+       dac_0_out = dac_0_out;
+       dac_1_out = dac_1_out;
+
+       brightness_A = brightness_A;
+       brightness_B = brightness_B;
+    }
+    
+    dac.begin(0x60);
+    dac.setVoltage(dac_0_out, false);
+    dac.begin(0x61);
+    dac.setVoltage(dac_1_out, false);
+
+    
+    //if pressed and off: turn on, sample dac_0 value and hold
+    //if pressed on on: turn off, continually sample dac0 values
+
+    //SET THEM GATE OUTPUTS
+    digitalWrite(xPin, cap_reading_x);
+    digitalWrite(yPin, cap_reading_y); 
+    
+    //light up those LEDs!
+    analogWrite(ledPin_A, brightness_A);
+    analogWrite(ledPin_B, brightness_B);
+    // end LEDS
+    
+
+     /*   
     //Serial.print("Millis = ");
     //Serial.print(millis() - start);           // check on performance in milliseconds
+    //Serial.print("Button State = ");
+    //Serial.print(buttonState1);              
+    //Serial.print("\t");
+    //Serial.print("Button Read = ");
+    //Serial.print(buttonRead1);              
+    //Serial.println("\t");
     Serial.print("\t");
     Serial.print("X Touch = ");
     Serial.print(cap_reading_x);              // print sensor X
@@ -112,7 +195,7 @@ void loop()
     Serial.print("\t");
     Serial.print("A Touch = ");
     Serial.print(cap_reading_a);              // print sensor A
-    Serial.print("\t");
+    Serial.print("\t");   
     Serial.print("Brightness A = ");
     Serial.print(brightness_A);               // print brightness
     Serial.print("\t");
@@ -123,39 +206,8 @@ void loop()
     Serial.print(brightness_B);
     Serial.println("\t");
 
-    delay(100);                             // arbitrary delay to limit data to serial port 
-
-    //SET THOSE DAC OUTPUT VALUES!
-    
-    //First Map Cap Readings to DAC Input values
-    //0V Output = 0 - 5V Output = 4095
-    unsigned int dac_0_out = map(cap_reading_a, 0, 800, 0, 4095);  
-    unsigned int dac_1_out = map(cap_reading_b, 0, 800, 0, 4095); 
-    
-    dac.begin(0x60);
-    dac.setVoltage(dac_0_out, false);
-    dac.begin(0x61);
-    dac.setVoltage(dac_1_out, false);
-    //END DACs
-
-    //SET THEM GATE OUTPUTS
-    digitalWrite(xPin, cap_reading_x);
-    digitalWrite(yPin, cap_reading_y); 
-    
-    //light up those LEDs!
-    brightness_A = map(cap_reading_a, 0, 800, 0, 200); //map the captouch A to led's brightness. 0 off, 255 max bright  
-    if (brightness_A < 5) {
-      brightness_A = 0;
-    }
-
-    brightness_B = map(cap_reading_b, 0, 800, 0, 200); //map the captouch A to led's brightness. 0 off, 255 max bright  
-    if (brightness_B < 5) {
-      brightness_B = 0;
-    }
-    analogWrite(ledPin_A, brightness_A);
-    analogWrite(ledPin_B, brightness_B);
-    // end LEDS
-    
+    //delay(10);                             // arbitrary delay to limit data to serial port 
+     */    
 } //end Loop
 
 
