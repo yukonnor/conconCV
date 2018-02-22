@@ -16,6 +16,7 @@
  * - Add code to "maintain" values when finger leaves on A & B sensors OR use sample and hold button
  * -- if fader is 'touched' (reads > low value), reads values in real time
  * -- if fader is 'not_touched', sets value to last read value
+ * -- Add new global 'smooth maintain' variables if needed
  * - try to wire a and b together to save pinnnnns
  * - debounce push buttons 
  * - ergonimics
@@ -51,9 +52,8 @@ int brightness_B = 0;
 const int xPin = 12;
 const int yPin = 13;
 
-const int button1Pin = 0;
-int button1 = 0;
-int buttonState1 = 0; //0 if off, 1 is on
+const int button_a_Pin = 0;
+int button_a_State = 0; //0 if off, 1 is on
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
 
@@ -62,7 +62,6 @@ unsigned int dac_1_out = 0;
 
 //Define Smoothing Variables
 const int numReadings = 100;       // smoothness time: 10 immediate, 50 med, 100 long (yet still playable)
-const int min_a_value = 80;       // 'touched' level
 int readings_a[numReadings];      // array of the readings from the analog input
 int readings_b[numReadings]; 
 int readIndex_a = 0;              // the index of the current reading
@@ -79,7 +78,7 @@ void setup()
   pinMode(ledPin_B, OUTPUT);
   pinMode(xPin, OUTPUT);
   pinMode(yPin, OUTPUT);
-  pinMode(button1Pin, INPUT_PULLUP);
+  pinMode(button_a_Pin, INPUT_PULLUP);
 
   //Smoothing - initialize all the readings to 0:
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {
@@ -108,20 +107,32 @@ void loop()
     int dirty_reading_a =  cs_a.capacitiveSensor(30); //0 - 600 with 470K resistor
     int dirty_reading_b =  cs_b.capacitiveSensor(30); //0 - 680 with 470K resistor (maybe try to decrease?)
 
-    //IF "MAINTAIN" Button if OFF, Smooth A & B Values Contantly
-    int cap_reading_a = Smooth_A(dirty_reading_a); //A reading is now smoothed
+    int button_a_Read = digitalRead(button_a_Pin); 
+    
+    //On off Logic: if off and pressed, turn on
+    if (button_a_Read == LOW && button_a_State == 0 &&((millis() - lastDebounceTime) > debounceDelay)) {
+        button_a_State = 1;
+        lastDebounceTime = millis();
+       }
+       else if (button_a_Read == LOW && button_a_State == 1 && ((millis() - lastDebounceTime) > debounceDelay)){
+        button_a_State = 0;
+        lastDebounceTime = millis();
+       }
+
+    //IF "MAINTAIN" Button if OFF, Record A values constantly
+    //IF "MAINTAIN" Button is ON, Keep last touched value using "Smooth_Maintain" function
+    if (button_a_State == 0) {
+      int cap_reading_a = Smooth_A(dirty_reading_a); //A reading is now smoothed
+    }
+    else {
+      int cap_reading_a = Smooth_Maintain_A(dirty_reading_a, 80, 10); //A value is now maintained if finger released
+    }
+    
+    
     int cap_reading_b = Smooth_B(dirty_reading_b); //B reading is now smoothed
     cap_reading_b = max(cap_reading_b, 35); //hacky way to 'eliminate' bleeding
     //when a was touched, b was going up to ~35. This makes 35 the '0 value for b (along with mapping functions below)
-    //any level below that was bareley noticibale anyways.
-
-     //IF "MAINTAIN" Button is ON, Check to aee if A & B are being Touched
-     //if (cap_reading_a <= low_value_a) {
-      //   boolean a_touched = FALSE;
-     //} else {a_touched = TRUE;}
-
-     //IF NOT BEING TOUCHED, 
-     //IF BEING TOUCHED, Smooth values like before
+    //any level below that was bareley noticibale anyways.  
 
     //Logic for X & Y On Off
     cap_reading_x = On_Off_Threshold(cap_reading_x, 140); //if x is > 140, it is HIGH. Else LOW.
@@ -129,54 +140,13 @@ void loop()
 
     //if S&H button off, set dac values to map to current capsense readings
     //if S&H button on, set dac value to last value read
-    int buttonRead1 = digitalRead(button1Pin); 
-    //if off and pressed, turn on
-    if (buttonRead1 == LOW && buttonState1 == 0 &&((millis() - lastDebounceTime) > debounceDelay)) {
-        buttonState1 = 1;
-        lastDebounceTime = millis();
-       }
-       else if (buttonRead1 == LOW && buttonState1 == 1 && ((millis() - lastDebounceTime) > debounceDelay)){
-        buttonState1 = 0;
-        lastDebounceTime = millis();
-       }
     
-
-    if (buttonState1 == 0) { //if S&H off, samle continually!
-    //SET THOSE DAC OUTPUT VALUES!
-    //First Map Cap Readings to DAC Input values
-    //0V Output = 0 - 5V Output = 4095
-    dac_0_out = map(cap_reading_a, 0, 400, 0, 4095);  
-    dac_1_out = map(cap_reading_b, 35, 400, 0, 4095); 
-    dac_0_out = min(dac_0_out, 4095); //make sure dacs don't go above 4095
-    dac_1_out = min(dac_1_out, 4095);
-
-    brightness_A = map(cap_reading_a, 0, 400, 0, 200); //map the captouch A to led's brightness. 0 off, 255 max bright  
-    if (brightness_A < 5) {
-      brightness_A = 0;
-       }
-
-    brightness_B = map(cap_reading_b, 35, 400, 0, 200); //map the captouch A to led's brightness. 0 off, 255 max bright  
-    if (brightness_B < 5) {
-      brightness_B = 0;
-      }
-    }
-
-    if (buttonState1 == 1) { //if S&H on, keep at current values
-       dac_0_out = dac_0_out;
-       dac_1_out = dac_1_out;
-
-       brightness_A = brightness_A;
-       brightness_B = brightness_B;
-    }
     
     dac.begin(0x60);
     dac.setVoltage(dac_0_out, false);
     dac.begin(0x61);
     dac.setVoltage(dac_1_out, false);
 
-    
-    //if pressed and off: turn on, sample dac_0 value and hold
-    //if pressed on on: turn off, continually sample dac0 values
 
     //SET THEM GATE OUTPUTS
     digitalWrite(xPin, cap_reading_x);
@@ -223,19 +193,13 @@ void loop()
        
 } //end Loop
 
-
 int Smooth_A(int dirty_reading) {
   //Be sure to include global variables and intializer in setup()
   
   // subtract the last reading:
   total_a = total_a - readings_a[readIndex_a];
   // read from the sensor:
-  if (dirty_reading > min_a_value ) {  //if above this touched value, keep at that value when sensor released
-  readings_a[readIndex_a] = dirty_reading;}
-  //if sensor is being TOUCHED (dirty measures over 10) below the min_a_value, bring average down to 0
-  else if (dirty_reading > 10) {
-  readings_a[readIndex_a] = 0;  
-  }
+  readings_a[readIndex_a] = dirty_reading;
   // add the reading to the total:
   total_a = total_a + readings_a[readIndex_a];
   // advance to the next position in the array:
@@ -251,7 +215,8 @@ int Smooth_A(int dirty_reading) {
 
   return average_reading_a;
 
-} //end Smooth_A 
+} //end Smooth_A
+
 
 int Smooth_B(int dirty_reading) {
   //Be sure to include global variables and intializer in setup()
@@ -275,8 +240,38 @@ int Smooth_B(int dirty_reading) {
 
   return average_reading_b;
 
-} //end Smooth_A 
+} //end Smooth_B
 
+
+//Use this function to maintain the 'last touched value' if finger is removed
+int Smooth_Maintain_A(int dirty_reading, int hold_above_value, int touch_threshold) {  //used 80 and 10
+  //Be sure to include global variables and intializer in setup()
+
+  // subtract the last reading:
+  total_a = total_a - readings_a[readIndex_a];
+  // read from the sensor:
+  if (dirty_reading > hold_above_value ) {  //if above this touched value, keep at that value when sensor released
+  readings_a[readIndex_a] = dirty_reading;}
+  //if sensor is being TOUCHED (dirty measures over 10) below the min_a_value, bring average down to 0
+  else if (dirty_reading > touch_threshold) {  //if it's touched above the 'touch_threshold' but below the 'hold_above_value', let fall to 0
+  readings_a[readIndex_a] = 0;  
+  }
+  // add the reading to the total:
+  total_a = total_a + readings_a[readIndex_a];
+  // advance to the next position in the array:
+  readIndex_a = readIndex_a + 1;
+
+  // if we're at the end of the array...
+  if (readIndex_a >= numReadings) {
+    // ...wrap around to the beginning:
+    readIndex_a = 0;
+    }
+  // calculate the average:
+  average_reading_a = total_a / numReadings;
+
+  return average_reading_a;
+
+} //end Smooth_Maintain_A 
 
 boolean On_Off_Threshold(int on_off, int threshold) {
 
