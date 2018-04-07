@@ -75,42 +75,52 @@ int button_b_State = 0;
 int button_c_State = 0;
 int button_d_State = 0;
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
-const byte debounceDelay = 200;    // the debounce time; increase if the output flickers
+const byte debounceDelay = 200;      // the debounce time; increase if the output flickers
 
 //DAC Variables
-unsigned int dac_0_out = 0;  //0 - 255 (5V)
+unsigned int dac_0_out = 0;  //0 - 255 (0 - 5V)
 unsigned int dac_1_out = 0;
 unsigned int dac_2_out = 0;
 unsigned int dac_3_out = 0;
 
 //Define Smoothing Variables
 const byte numReadings = 10;       // smoothness time: 10 immediate, 50 med, 100 long (yet still playable) Golden: **75**
-int readings_a[numReadings];      // array of the readings from the analog input
+int readings_a[numReadings];       // array of the readings from the analog input
 int readings_b[numReadings]; 
+int readings_c[numReadings];
+int readings_d[numReadings];
 byte readIndex_a = 0;              // the index of the current reading
 byte readIndex_b = 0;
-int total_a = 0;                  // the running total
+byte readIndex_c = 0;
+byte readIndex_d = 0;
+int total_a = 0;                   // the running total
 int total_b = 0; 
-int average_reading_a = 0;        // the average
+int total_c = 0; 
+int total_d = 0; 
+int average_reading_a = 0;         // the average
 int average_reading_b = 0; 
+int average_reading_c = 0; 
+int average_reading_d = 0; 
 
 void setup()                    
 {
   // declare LED pins and XY Gate pins to be outputs:
   pinMode(ledPin_A, OUTPUT);
   pinMode(ledPin_B, OUTPUT);
+  pinMode(ledPin_C, OUTPUT);
+  pinMode(ledPin_D, OUTPUT);
   pinMode(xPin, OUTPUT);
   pinMode(yPin, OUTPUT);
   pinMode(button_a_Pin, INPUT_PULLUP);
+  pinMode(button_b_Pin, INPUT_PULLUP);
+  pinMode(button_c_Pin, INPUT_PULLUP);
+  pinMode(button_d_Pin, INPUT_PULLUP);
 
-  //Smoothing - initialize all the readings to 0:
-  for (int thisReading = 0; thisReading < numReadings; thisReading++) {
-      readings_a[thisReading] = 0;
-  }
-  
-  for (int thisReading = 0; thisReading < numReadings; thisReading++) {
-      readings_b[thisReading] = 0;
-  }
+  //Smoothing - Initialize all the readings to 0:
+  for (int thisReading = 0; thisReading < numReadings; thisReading++) {readings_a[thisReading] = 0;}
+  for (int thisReading = 0; thisReading < numReadings; thisReading++) {readings_b[thisReading] = 0;}
+  for (int thisReading = 0; thisReading < numReadings; thisReading++) {readings_c[thisReading] = 0;}
+  for (int thisReading = 0; thisReading < numReadings; thisReading++) {readings_d[thisReading] = 0;}
   
   Serial.begin(9600);
 }
@@ -123,8 +133,13 @@ void loop()
     cap_reading_y =  cs_y.capacitiveSensor(30); //on-off based on logic below
     dirty_reading_a =  cs_a.capacitiveSensor(30); //0 - 215
     dirty_reading_b =  cs_b.capacitiveSensor(30); //0 - 215 
+    dirty_reading_c =  cs_c.capacitiveSensor(30); //0 - 215 
+    dirty_reading_d =  cs_d.capacitiveSensor(30); //0 - 215 
 
-    int button_a_Read = digitalRead(button_a_Pin); 
+    int button_a_Read = digitalRead(button_a_Pin);
+    int button_b_Read = digitalRead(button_b_Pin);
+    int button_c_Read = digitalRead(button_c_Pin);
+    int button_d_Read = digitalRead(button_d_Pin); 
     
     //On off Logic: if button pressed (LOW) and if state is off, turn on
     if (button_a_Read == LOW && ((millis() - lastDebounceTime) > debounceDelay)) {
@@ -141,10 +156,13 @@ void loop()
          }
     
     cap_reading_b = Smooth_B(dirty_reading_b); //B reading is now smoothed
-    cap_reading_a = max(cap_reading_a, 35);
-    cap_reading_b = max(cap_reading_b, 35); //hacky way to 'eliminate' bleeding
-    //when a was touched, b was going up to ~35. This makes 35 the '0 value for b (along with mapping functions below)
-    //any level below that was bareley noticibale anyways.  
+    cap_reading_c = Smooth_C(dirty_reading_c); 
+    cap_reading_d = Smooth_D(dirty_reading_d); 
+    
+    cap_reading_a = max(cap_reading_a, 60);
+    cap_reading_b = max(cap_reading_b, 60); //Hacky way to 'eliminate' bleeding. When A was touched, B was going up to ~35. 
+    cap_reading_c = max(cap_reading_c, 60); //This makes 60 the '0 value' (along with mapping functions below)
+    cap_reading_d = max(cap_reading_d, 70);  
 
     //Logic for X & Y Gate On Off
     bool reading_x = On_Off_Threshold(cap_reading_x, 200); //if x is > 200, it is HIGH. Else LOW.
@@ -154,33 +172,47 @@ void loop()
     digitalWrite(xPin, reading_x);
     digitalWrite(yPin, reading_y); 
 
-    //Map A & B Values
-    dac_0_out = map(cap_reading_a, 35, 215, 0, 255);    
-    dac_1_out = map(cap_reading_b, 35, 215, 0, 255);  
-    dac_0_out = min(dac_0_out, 255); //make sure dacs don't go above 255 
+    //Map A - D Cap Values to DAC Values
+    dac_0_out = map(cap_reading_a, 60, 420, 0, 255);    
+    dac_1_out = map(cap_reading_b, 60, 400, 0, 255);  
+    dac_2_out = map(cap_reading_c, 60, 300, 0, 255);    
+    dac_3_out = map(cap_reading_d, 70, 400, 0, 255); 
+    dac_0_out = min(dac_0_out, 255);   //make sure dacs don't go above 255 
     dac_1_out = min(dac_1_out, 255);
+    dac_2_out = min(dac_2_out, 255); 
+    dac_3_out = min(dac_3_out, 255);
     
-    brightness_A = map(cap_reading_a, 35, 215, 0, 200); //map the captouch A to led's brightness. 0 off, 255 max bright    
+    brightness_A = map(cap_reading_a, 60, 420, 0, 200); //map the captouch A to led's brightness. 0 off, 255 max bright    
     if (brightness_A < 5) {  
        brightness_A = 0;} //turn off led if low
 
-    brightness_B = map(cap_reading_b, 35, 215, 0, 200); //map the captouch A to led's brightness. 0 off, 255 max bright    
+    brightness_B = map(cap_reading_b, 60, 400, 0, 200);     
     if (brightness_B < 5) {  
        brightness_B = 0;  }  
+
+    brightness_C = map(cap_reading_c, 60, 300, 0, 200);     
+    if (brightness_C < 5) {  
+       brightness_C = 0;  } 
+
+    brightness_D = map(cap_reading_d, 70, 400, 0, 200);     
+    if (brightness_D < 5) {  
+       brightness_D = 0;  } 
     
     //SET THOSE DAC OUTPUTS
     dac.write(0, dac_0_out);
     dac.write(1, dac_1_out);
+    dac.write(2, dac_2_out);
+    dac.write(3, dac_3_out);
 
     //light up those LEDs!
     analogWrite(ledPin_A, brightness_A);
     analogWrite(ledPin_B, brightness_B);
+    analogWrite(ledPin_C, brightness_C);
+    analogWrite(ledPin_D, brightness_D);
     
     debug(1); //if 1, print serial readings
        
-} //end Loop
-
-
+} //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop 
 
 
 
@@ -223,6 +255,35 @@ int Smooth_B(int dirty_reading) {
   return average_reading_b;
 } //end Smooth_B
 
+int Smooth_C(int dirty_reading) {
+  //See Smooth_A for comments / explination
+  total_c = total_c - readings_c[readIndex_c];
+  readings_c[readIndex_c] = dirty_reading;
+  total_c = total_c + readings_c[readIndex_c];
+  readIndex_c = readIndex_b + 1;
+
+  if (readIndex_c >= numReadings) {
+     readIndex_c = 0;
+     }
+
+  average_reading_c = total_c / numReadings;
+  return average_reading_c;
+} //end Smooth_C
+
+int Smooth_D(int dirty_reading) {
+  //See Smooth_A for comments / explination
+  total_d = total_d - readings_d[readIndex_d];
+  readings_d[readIndex_d] = dirty_reading;
+  total_d = total_d + readings_d[readIndex_d];
+  readIndex_d = readIndex_d + 1;
+
+  if (readIndex_d >= numReadings) {
+     readIndex_d = 0;
+     }
+
+  average_reading_d = total_d / numReadings;
+  return average_reading_d;
+} //end Smooth_D
 
 //Use this function to maintain the 'last touched value' if finger is removed
 int Smooth_Maintain_A(int dirty_reading, int hold_above_value, int touch_threshold) {  //used 80 and 10
@@ -292,28 +353,40 @@ void debug(boolean debug_on){
     //Serial.print("Button A State = ");
     //Serial.print(button_a_State);              
     //Serial.print("\t");
-    Serial.print("X Touch = ");
-    Serial.print(cap_reading_x);              // print sensor X
-    Serial.print("\t");
-    Serial.print("Y Touch = ");
-    Serial.print(cap_reading_y);              // print sensor Y
+    //Serial.print("X Touch = ");
+    //Serial.print(cap_reading_x);              // print sensor X
+    //Serial.print("\t");
+    //Serial.print("Y Touch = ");
+    //Serial.print(cap_reading_y);              // print sensor Y
     //Serial.print("\t");
     //Serial.print("Dirty A = ");
     //Serial.print(dirty_reading_a);              // print sensor Y
     //Serial.print("\t");
-    //Serial.print("A Touch = ");
-    //Serial.print(cap_reading_a);              // print sensor A
-    //Serial.print("\t");   
+    Serial.print("A Touch = ");
+    Serial.print(cap_reading_a);              // print sensor A
+    Serial.print("\t");   
     //Serial.print("Brightness A = ");
     //Serial.print(brightness_A);               // print brightness
     //Serial.print("\t");
-    //Serial.print("B Touch = ");
-    //Serial.print(cap_reading_b);              // print sensor B
-    //Serial.print("\t");
+    Serial.print("B Touch = ");
+    Serial.print(cap_reading_b);              // print sensor B
+    Serial.print("\t");
     //Serial.print("Brightness B = ");
     //Serial.print(brightness_B);
     //Serial.print("\t");
-    //Serial.print(dac_0_out);
+    //Serial.print("Dirty C = ");
+    //Serial.print(dirty_reading_c);              
+    //Serial.print("\t");
+    Serial.print("C Touch = ");
+    Serial.print(cap_reading_c);   
+    Serial.print("\t");
+    //Serial.print("Dirty D = ");
+    //Serial.print(dirty_reading_d);             
+    //Serial.print("\t");
+    Serial.print("D Touch = ");
+    Serial.print(cap_reading_d);  
+    Serial.print("\t");
+    Serial.print(dac_2_out);
     Serial.println("\t");
 
     delay(2);
