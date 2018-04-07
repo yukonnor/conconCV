@@ -13,11 +13,7 @@
  * - Sets external CV: 0V or 4.8V (on-off) based on whether or not finger is touching pad
  * 
  * TODO: 
- * - figure out why there is latency (turning off serial helped!)
- * - map pins 
- * - ergonimics
- * - solder protoboard of what's currently breadboarded
- * - figue out case design - copper foil on wood then laquer over
+ * - write 'menu' functions triggered by long press of buttons (EG rate - i.e. numReadings value)
  * 
  * 
  * NOTES ABOUT CapacitiveSensor:
@@ -32,8 +28,8 @@
 
 maxdac dac(B0101000); //address for dac (B0101{AD0}{AD1}{AD2})
 
-CapacitiveSensor   cs_x = CapacitiveSensor(0,4);    // 470K resistor between pins 2 & 4, pin 4 is sensor pin, add wire, foil
-CapacitiveSensor   cs_y = CapacitiveSensor(0,3);    // 470K resistor between pins 2 & 5, pin 5 is sensor pin, add wire, foil
+CapacitiveSensor   cs_x = CapacitiveSensor(2,4);    // 470K resistor between pins 2 & 4, pin 4 is sensor pin, add wire, foil
+CapacitiveSensor   cs_y = CapacitiveSensor(2,3);    // 470K resistor between pins 2 & 5, pin 5 is sensor pin, add wire, foil
 CapacitiveSensor   cs_a = CapacitiveSensor(13,12);    // 300K resistor between pins 5 & 6, pin 6 is sensor pin, add wire, foil
 CapacitiveSensor   cs_b = CapacitiveSensor(13,9);    // 300K resistor between pins 8 & 7, pin 7 is sensor pin
 CapacitiveSensor   cs_c = CapacitiveSensor(13,8);
@@ -70,10 +66,14 @@ const int button_a_Pin = A0;
 const int button_b_Pin = A1;
 const int button_c_Pin = A2;
 const int button_d_Pin = A3;
-int button_a_State = 0;      //0 is off, 1 is on
-int button_b_State = 0;
-int button_c_State = 0;
-int button_d_State = 0;
+int button_a_Read;
+int button_b_Read;
+int button_c_Read;
+int button_d_Read;
+bool button_a_State = 0;      //0 is off, 1 is on
+bool button_b_State = 0;
+bool button_c_State = 0;
+bool button_d_State = 0;
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 const byte debounceDelay = 200;      // the debounce time; increase if the output flickers
 
@@ -84,7 +84,7 @@ unsigned int dac_2_out = 0;
 unsigned int dac_3_out = 0;
 
 //Define Smoothing Variables
-const byte numReadings = 10;       // smoothness time: 10 immediate, 50 med, 100 long (yet still playable) Golden: **75**
+const byte numReadings = 75;       // smoothness time: 10 immediate, 50 med, 100 long (yet still playable) Golden: **75**
 int readings_a[numReadings];       // array of the readings from the analog input
 int readings_b[numReadings]; 
 int readings_c[numReadings];
@@ -122,7 +122,7 @@ void setup()
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {readings_c[thisReading] = 0;}
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {readings_d[thisReading] = 0;}
   
-  Serial.begin(9600);
+  //Serial.begin(9600);
 }
 
 void loop()                    
@@ -136,32 +136,31 @@ void loop()
     dirty_reading_c =  cs_c.capacitiveSensor(30); //0 - 215 
     dirty_reading_d =  cs_d.capacitiveSensor(30); //0 - 215 
 
-    int button_a_Read = digitalRead(button_a_Pin);
-    int button_b_Read = digitalRead(button_b_Pin);
-    int button_c_Read = digitalRead(button_c_Pin);
-    int button_d_Read = digitalRead(button_d_Pin); 
     
-    //On off Logic: if button pressed (LOW) and if state is off, turn on
-    if (button_a_Read == LOW && ((millis() - lastDebounceTime) > debounceDelay)) {
-        button_a_State = !button_a_State;
-        lastDebounceTime = millis();
-       }
+    //On-Off Logic: if button pressed (LOW) and if state is off, turn on & vice versa
+    button_a_State = Toggle_Button(button_a_Pin, button_a_Read, button_a_State);
+    button_b_State = Toggle_Button(button_b_Pin, button_b_Read, button_b_State);
+    button_c_State = Toggle_Button(button_c_Pin, button_c_Read, button_c_State);
+    button_d_State = Toggle_Button(button_d_Pin, button_d_Read, button_d_State);
 
-    //IF "MAINTAIN" Button if OFF, record A values constantly. If ON, keep last touched value using "Smooth_Maintain" function
-    if (button_a_State == 0) {
-        cap_reading_a = Smooth_A(dirty_reading_a); //A reading is now smoothed
-       }
-       else {
-         cap_reading_a = Smooth_Maintain_A(dirty_reading_a, 40, 35); //hold above, touch threshold - A value is now maintained if finger released
-         }
+    //IF "Latching" Buttons OFF, record cap_touch values constantly. If ON, keep last touched value using "Smooth_Maintain" function
+    if (button_a_State == 0) {cap_reading_a = Smooth_A(dirty_reading_a);} //Reading is now smoothed
+       else {cap_reading_a = Smooth_Maintain_A(dirty_reading_a, 65, 60);} //Hold above value, Touch threshold value- Touch value is now maintained @ last touched if finger released
+
+    if (button_b_State == 0) {cap_reading_b = Smooth_B(dirty_reading_b);} 
+       else {cap_reading_b = Smooth_Maintain_B(dirty_reading_b, 65, 60);} 
+
+    if (button_c_State == 0) {cap_reading_c = Smooth_C(dirty_reading_c);} 
+       else {cap_reading_c = Smooth_Maintain_C(dirty_reading_c, 65, 60);} 
+
+    if (button_d_State == 0) {cap_reading_d = Smooth_D(dirty_reading_d);} 
+       else {cap_reading_d = Smooth_Maintain_D(dirty_reading_d, 65, 60);} 
     
-    cap_reading_b = Smooth_B(dirty_reading_b); //B reading is now smoothed
-    cap_reading_c = Smooth_C(dirty_reading_c); 
-    cap_reading_d = Smooth_D(dirty_reading_d); 
-    
+    //Hacky way to 'eliminate' bleeding. When, for example, A was touched, B was going up to ~60. 
+    //This makes 60 the '0 value' (along with mapping functions below)
     cap_reading_a = max(cap_reading_a, 60);
-    cap_reading_b = max(cap_reading_b, 60); //Hacky way to 'eliminate' bleeding. When A was touched, B was going up to ~35. 
-    cap_reading_c = max(cap_reading_c, 60); //This makes 60 the '0 value' (along with mapping functions below)
+    cap_reading_b = max(cap_reading_b, 60); 
+    cap_reading_c = max(cap_reading_c, 60); 
     cap_reading_d = max(cap_reading_d, 70);  
 
     //Logic for X & Y Gate On Off
@@ -173,10 +172,10 @@ void loop()
     digitalWrite(yPin, reading_y); 
 
     //Map A - D Cap Values to DAC Values
-    dac_0_out = map(cap_reading_a, 60, 420, 0, 255);    
-    dac_1_out = map(cap_reading_b, 60, 400, 0, 255);  
-    dac_2_out = map(cap_reading_c, 60, 300, 0, 255);    
-    dac_3_out = map(cap_reading_d, 70, 400, 0, 255); 
+    dac_0_out = map(cap_reading_c, 60, 420, 0, 255);    
+    dac_1_out = map(cap_reading_d, 60, 400, 0, 255);  
+    dac_3_out = map(cap_reading_a, 60, 300, 0, 255);   
+    dac_2_out = map(cap_reading_b, 70, 400, 0, 255); 
     dac_0_out = min(dac_0_out, 255);   //make sure dacs don't go above 255 
     dac_1_out = min(dac_1_out, 255);
     dac_2_out = min(dac_2_out, 255); 
@@ -210,7 +209,7 @@ void loop()
     analogWrite(ledPin_C, brightness_C);
     analogWrite(ledPin_D, brightness_D);
     
-    debug(1); //if 1, print serial readings
+    debug(0); //if 1, print serial readings
        
 } //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop 
 
@@ -315,8 +314,8 @@ int Smooth_Maintain_A(int dirty_reading, int hold_above_value, int touch_thresho
 
 } //end Smooth_Maintain_A 
 
-int Smooth_Maintain_B(int dirty_reading, int hold_above_value, int touch_threshold) {  //used 80 and 10
-  //See Smooth_Maintain_B for comments
+int Smooth_Maintain_B(int dirty_reading, int hold_above_value, int touch_threshold) {  
+  //See Smooth_Maintain_A for comments
   total_b = total_b - readings_b[readIndex_b];
   if (dirty_reading > hold_above_value ) {  
     readings_b[readIndex_b] = dirty_reading;}
@@ -324,14 +323,63 @@ int Smooth_Maintain_B(int dirty_reading, int hold_above_value, int touch_thresho
       readings_b[readIndex_b] = 0;  
       }
   total_b = total_b + readings_b[readIndex_b];
-  readIndex_a = readIndex_a + 1;
+  readIndex_b = readIndex_b + 1;
 
-  if (readIndex_a >= numReadings) {
-    readIndex_a = 0;
+  if (readIndex_b >= numReadings) {
+    readIndex_b = 0;
     }
-  average_reading_a = total_a / numReadings;
-  return average_reading_a;
+  average_reading_b = total_b / numReadings;
+  return average_reading_b;
 } 
+
+int Smooth_Maintain_C(int dirty_reading, int hold_above_value, int touch_threshold) {  
+  //See Smooth_Maintain_A for comments
+  total_c = total_c - readings_c[readIndex_b];
+  if (dirty_reading > hold_above_value ) {  
+    readings_c[readIndex_c] = dirty_reading;}
+    else if (dirty_reading > touch_threshold) {  
+      readings_c[readIndex_c] = 0;  
+      }
+  total_c = total_c + readings_c[readIndex_b];
+  readIndex_c = readIndex_c + 1;
+
+  if (readIndex_c >= numReadings) {
+    readIndex_c = 0;
+    }
+  average_reading_c = total_c / numReadings;
+  return average_reading_c;
+} 
+
+int Smooth_Maintain_D(int dirty_reading, int hold_above_value, int touch_threshold) {  
+  //See Smooth_Maintain_A for comments
+  total_d = total_d - readings_d[readIndex_d];
+  if (dirty_reading > hold_above_value ) {  
+    readings_d[readIndex_d] = dirty_reading;}
+    else if (dirty_reading > touch_threshold) {  
+      readings_d[readIndex_d] = 0;  
+      }
+  total_d = total_d + readings_d[readIndex_d];
+  readIndex_d = readIndex_d + 1;
+
+  if (readIndex_d >= numReadings) {
+    readIndex_d = 0;
+    }
+  average_reading_d = total_d / numReadings;
+  return average_reading_d;
+} 
+
+
+boolean Toggle_Button(int button_pin, boolean button_read, boolean button_state) {   
+  
+  button_read = digitalRead(button_pin);
+   
+  if (button_read == LOW && ((millis() - lastDebounceTime) > debounceDelay)) {
+      button_state = !button_state;
+      lastDebounceTime = millis();
+      }
+      return button_state;
+}
+
 
 boolean On_Off_Threshold(int on_off, int threshold) {
 
@@ -353,40 +401,40 @@ void debug(boolean debug_on){
     //Serial.print("Button A State = ");
     //Serial.print(button_a_State);              
     //Serial.print("\t");
-    //Serial.print("X Touch = ");
-    //Serial.print(cap_reading_x);              // print sensor X
-    //Serial.print("\t");
-    //Serial.print("Y Touch = ");
-    //Serial.print(cap_reading_y);              // print sensor Y
-    //Serial.print("\t");
+    Serial.print("X Touch = ");
+    Serial.print(cap_reading_x);              // print sensor X
+    Serial.print("\t");
+    Serial.print("Y Touch = ");
+    Serial.print(cap_reading_y);              // print sensor Y
+    Serial.print("\t");
     //Serial.print("Dirty A = ");
     //Serial.print(dirty_reading_a);              // print sensor Y
     //Serial.print("\t");
-    Serial.print("A Touch = ");
-    Serial.print(cap_reading_a);              // print sensor A
-    Serial.print("\t");   
+    //Serial.print("A Touch = ");
+    //Serial.print(cap_reading_a);              // print sensor A
+    //Serial.print("\t");   
     //Serial.print("Brightness A = ");
     //Serial.print(brightness_A);               // print brightness
     //Serial.print("\t");
-    Serial.print("B Touch = ");
-    Serial.print(cap_reading_b);              // print sensor B
-    Serial.print("\t");
+    //Serial.print("B Touch = ");
+    //Serial.print(cap_reading_b);              // print sensor B
+    //Serial.print("\t");
     //Serial.print("Brightness B = ");
     //Serial.print(brightness_B);
     //Serial.print("\t");
     //Serial.print("Dirty C = ");
     //Serial.print(dirty_reading_c);              
     //Serial.print("\t");
-    Serial.print("C Touch = ");
-    Serial.print(cap_reading_c);   
-    Serial.print("\t");
+    //Serial.print("C Touch = ");
+    //Serial.print(cap_reading_c);   
+    //Serial.print("\t");
     //Serial.print("Dirty D = ");
     //Serial.print(dirty_reading_d);             
     //Serial.print("\t");
-    Serial.print("D Touch = ");
-    Serial.print(cap_reading_d);  
-    Serial.print("\t");
-    Serial.print(dac_2_out);
+    //Serial.print("D Touch = ");
+    //Serial.print(cap_reading_d);  
+    //Serial.print("\t");
+    //Serial.print(dac_2_out);
     Serial.println("\t");
 
     delay(2);
