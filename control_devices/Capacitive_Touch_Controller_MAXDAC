@@ -32,8 +32,8 @@ maxdac dac(B0101000); //address for dac (B0101{AD0}{AD1}{AD2})
 
 CapacitiveSensor   cs_x = CapacitiveSensor(2,4);    // 470K resistor between pins 2 & 4, pin 4 is sensor pin, add wire, foil
 CapacitiveSensor   cs_y = CapacitiveSensor(2,3);    // 470K resistor between pins 2 & 5, pin 5 is sensor pin, add wire, foil
-CapacitiveSensor   cs_a = CapacitiveSensor(13,12);    // 300K resistor between pins 5 & 6, pin 6 is sensor pin, add wire, foil
-CapacitiveSensor   cs_b = CapacitiveSensor(13,9);    // 300K resistor between pins 8 & 7, pin 7 is sensor pin
+CapacitiveSensor   cs_a = CapacitiveSensor(13,A2);    // 300K resistor between pins 5 & 6, pin 6 is sensor pin, add wire, foil
+CapacitiveSensor   cs_b = CapacitiveSensor(13,A3);    // 300K resistor between pins 8 & 7, pin 7 is sensor pin
 CapacitiveSensor   cs_c = CapacitiveSensor(13,8);
 CapacitiveSensor   cs_d = CapacitiveSensor(13,7);
 
@@ -48,8 +48,8 @@ byte brightness_C = 0;
 byte brightness_D = 0;
 
 //X & Y Gate OUT Pins
-const int xPin = A6;
-const int yPin = A7;
+const int xPin = 12;
+const int yPin = 9;
 
 //CapTouch Variables
 int cap_reading_x;
@@ -68,8 +68,8 @@ int cap_reading_d; //for smoothed values
 //Push button Variables
 const int button_a_Pin = A0;
 const int button_b_Pin = A1;
-const int button_c_Pin = A2;
-const int button_d_Pin = A3;
+const int button_c_Pin = A6;
+const int button_d_Pin = A7;
 int button_a_Read;
 int button_b_Read;
 int button_c_Read;
@@ -113,12 +113,12 @@ void setup()
   pinMode(ledPin_B, OUTPUT);
   pinMode(ledPin_C, OUTPUT);
   pinMode(ledPin_D, OUTPUT);
-  pinMode(A6, OUTPUT);
-  pinMode(A7, OUTPUT);
+  pinMode(xPin, OUTPUT);
+  pinMode(yPin, OUTPUT);
   pinMode(button_a_Pin, INPUT_PULLUP);
   pinMode(button_b_Pin, INPUT_PULLUP);
-  pinMode(button_c_Pin, INPUT_PULLUP);
-  pinMode(button_d_Pin, INPUT_PULLUP);
+  pinMode(button_c_Pin, INPUT);
+  pinMode(button_d_Pin, INPUT);
 
   //Smoothing - Initialize all the readings to 0:
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {readings_a[thisReading] = 0;}
@@ -141,11 +141,22 @@ void loop()
     dirty_reading_d =  cs_d.capacitiveSensor(30); //0 - 215 
 
     
-    //On-Off Logic: if button pressed (LOW) and if state is off, turn on & vice versa
+    //On-Off Logic for A&B: if button pressed (LOW) and if state is off, turn on & vice versa
     button_a_State = Toggle_Button(button_a_Pin, button_a_Read, button_a_State);
     button_b_State = Toggle_Button(button_b_Pin, button_b_Read, button_b_State);
-    button_c_State = Toggle_Button(button_c_Pin, button_c_Read, button_c_State);
-    button_d_State = Toggle_Button(button_d_Pin, button_d_Read, button_d_State);
+    
+    //On-Off Logic for C&D (analog read):
+    button_c_Read = analogRead(button_c_Pin);
+    if (button_c_Read > 1020 && ((millis() - lastDebounceTime) > debounceDelay)) {
+      button_c_State = !button_c_State;
+      lastDebounceTime = millis();
+      }
+
+    button_d_Read = analogRead(button_d_Pin);
+    if (button_d_Read > 1020 && ((millis() - lastDebounceTime) > debounceDelay)) {
+      button_d_State = !button_d_State;
+      lastDebounceTime = millis();
+      }
 
     int max_touch_a = 250;
     int max_touch_b = 190;
@@ -183,8 +194,8 @@ void loop()
     reading_y = On_Off_Threshold(cap_reading_y, 200); 
     
     //SET THEM GATE OUTPUTS
-    digitalWrite(A6, reading_x);
-    digitalWrite(A7, reading_y); 
+    digitalWrite(xPin, reading_x);
+    digitalWrite(yPin, reading_y); 
 
     //Map A - D Cap Values to DAC Values
     dac_a_out = map(cap_reading_a, touch_threshold_a, max_touch_a, 0, 255); //MAXDAC pin 3 out  
@@ -395,6 +406,17 @@ boolean Toggle_Button(int button_pin, boolean button_read, boolean button_state)
       return button_state;
 }
 
+boolean Analog_Toggle_Button(int button_pin, boolean button_read, boolean button_state) {   
+  
+  //button_read = analogRead(button_pin);
+   
+  if (button_read > 1020 && ((millis() - lastDebounceTime) > debounceDelay)) {
+      button_state = !button_state;
+      lastDebounceTime = millis();
+      }
+      return button_state;
+}
+
 
 boolean On_Off_Threshold(int on_off, int threshold) {
 
@@ -413,43 +435,42 @@ void debug(boolean debug_on){
   if(debug_on = 1){
     //Serial.print("Millis = ");
     //Serial.print(millis() - start);           // check on performance in milliseconds
-    //Serial.print("Button A State = ");
-    //Serial.print(button_a_State);              
+    //Serial.print("Button C State = ");
+    //Serial.print(button_c_State);              
     //Serial.print("\t");
-    Serial.print("X Touch = ");
-    Serial.print(reading_x);              // print sensor X cap_reading_x
-    Serial.print("\t");
-    Serial.print("Y Touch = ");
-    Serial.print(reading_y);              // print sensor Y
-    Serial.print("\t");
+    //Serial.print("X Touch = ");
+    //Serial.print(reading_x);              // print sensor X cap_reading_x
+    //Serial.print("\t");
+    //Serial.print("Y Touch = ");
+    //Serial.print(reading_y);              // print sensor Y
+    //Serial.print("\t");
     //Serial.print("Dirty A = ");
     //Serial.print(dirty_reading_a);              // print sensor Y
     //Serial.print("\t");
-    Serial.print("A Touch = ");
-    Serial.print(cap_reading_a);              // print sensor A
-    Serial.print("\t");   
+    //Serial.print("A Touch = ");
+    //Serial.print(cap_reading_a);              // print sensor A
+    //Serial.print("\t");   
     //Serial.print("Brightness A = ");
     //Serial.print(brightness_A);               // print brightness
     //Serial.print("\t");
-    Serial.print("B Touch = ");
-    Serial.print(cap_reading_b);              // print sensor B
-    Serial.print("\t");
+    //Serial.print("B Touch = ");
+    //Serial.print(cap_reading_b);              // print sensor B
+    //Serial.print("\t");
     //Serial.print("Brightness B = ");
     //Serial.print(brightness_B);
     //Serial.print("\t");
     //Serial.print("Dirty C = ");
     //Serial.print(dirty_reading_c);              
     //Serial.print("\t");
-    Serial.print("C Touch = ");
-    Serial.print(cap_reading_c);   
-    Serial.print("\t");
-    //Serial.print("Dirty D = ");
-    //Serial.print(dirty_reading_d);             
+    //Serial.print("C Touch = ");
+    //Serial.print(cap_reading_c);   
     //Serial.print("\t");
+    Serial.print("Dirty D = ");
+    Serial.print(dirty_reading_d);             
+    Serial.print("\t");
     Serial.print("D Touch = ");
     Serial.print(cap_reading_d);  
-    Serial.print("\t");
-    //Serial.print(dac_2_out);
+    //Serial.print("\t");
     Serial.println("\t");
 
     delay(2);
