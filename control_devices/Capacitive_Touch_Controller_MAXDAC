@@ -1,28 +1,20 @@
 /* NOTES ABOUT SKETCH:
  * Code to support a CV/Gate control surface with: 
- * - two 'trigger' controls (X/Y) and one mono output for each
- * - two 'cv level' controls (A/B) and one mono output for each
- * -- 'high' level cv is good around ~4.5V (wobble bug peaks 9V)
+ * - two 'trigger' controls (X&Y) and one gate output for each
+ * - four 'cv level' controls (A-D) and one cv output for each
  *
- * Sliders (A & B): 
+ * Touch 'Sliders' (A-D): 
  * - Sets external CV of 0V to 5V based on finger position (gradient)
- * - Maintains level of A/B when removing finger
- * - Indicates level of A/B sliders via A/B LED brightness
+ * - Latch Mode: Maintains level of A-D when removing finger
+ * - Indicates level of A-D sliders via A-D LED brightness
  * 
  * Gates (X & Y):
  * - Sets external CV: 0V or 4.8V (on-off) based on whether or not finger is touching pad
  * 
  * TODO: 
  * - continue to callibrate touch values
- * - rewire x&y outs (wire A&B touch receive to A6 and A7)
- * - write 'menu' functions triggered by long press of buttons (EG rate - i.e. numReadings value)
+ * - write 'menu' functions triggered by long press of buttons (EG rate (numReadings value), LFO, random)
  * 
- * 
- * NOTES ABOUT CapacitiveSensor:
- * Uses a high value resistor e.g. 10 megohm between send pin and receive pin
- * Resistor effects sensitivity, experiment with values, 50 kilohm - 50 megohm. Larger resistor values yield larger sensor values.
- * Receive pin is the sensor pin - try different amounts of foil/metal on this pin
- * Best results are obtained if sensor foil and wire is covered with an insulator such as paper or plastic sheet
  */
 #include <MAXDAC.h>
 #include <Wire.h> //I2C for DACs
@@ -88,7 +80,8 @@ unsigned int dac_c_out = 0;
 unsigned int dac_d_out = 0;
 
 //Define Smoothing Variables
-const byte numReadings = 10;       // smoothness time: 10 immediate, 50 med, 100 long (yet still playable) Golden: **75**
+const byte numReadings = 75;       // smoothness time: 10 immediate, 50 med, 100 long (yet still playable) Golden: **75**
+
 int readings_a[numReadings];       // array of the readings from the analog input
 int readings_b[numReadings]; 
 int readings_c[numReadings];
@@ -126,7 +119,7 @@ void setup()
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {readings_c[thisReading] = 0;}
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {readings_d[thisReading] = 0;}
   
-  Serial.begin(9600);
+  //Serial.begin(9600);
 }
 
 void loop()                    
@@ -158,29 +151,31 @@ void loop()
       lastDebounceTime = millis();
       }
 
-    int max_touch_a = 250;
-    int max_touch_b = 190;
-    int max_touch_c = 150;
-    int max_touch_d = 200;
+    int max_touch_a = 200; //at one point was: 350
+    int max_touch_b = 210; //350
+    int max_touch_c = 200; //340
+    int max_touch_d = 200; //330
     
-    int touch_threshold_a = 60;
-    int touch_threshold_b = 10;
-    int touch_threshold_c = 30;
-    int touch_threshold_d = 64;
+    int touch_threshold_a = 36;
+    int touch_threshold_b = 36;
+    int touch_threshold_c = 36;
+    int touch_threshold_d = 70;
     
 
     //IF "Latching" Buttons OFF, record cap_touch values constantly. If ON, keep last touched value using "Smooth_Maintain" function
     if (button_a_State == 0) {cap_reading_a = Smooth_A(dirty_reading_a);} //Reading is now smoothed
-       else {cap_reading_a = Smooth_Maintain_A(dirty_reading_a, 65, touch_threshold_a);} //Hold above value, Touch threshold value- Touch value is now maintained @ last touched if finger released
-
+       //Touch value is now maintained @ last touched if finger released:
+       else {cap_reading_a = Smooth_Maintain_A(dirty_reading_a, (touch_threshold_a+10), touch_threshold_a);} //Input, Hold above value, Touch threshold value
+       //if input is above this 'hold above' value, keep at that value when sensor released
+       //if the input above the 'touch_threshold' but below the 'hold_above_value', let fall to 0
     if (button_b_State == 0) {cap_reading_b = Smooth_B(dirty_reading_b);} 
-       else {cap_reading_b = Smooth_Maintain_B(dirty_reading_b, 65, touch_threshold_b);} 
+       else {cap_reading_b = Smooth_Maintain_B(dirty_reading_b, (touch_threshold_b+10), touch_threshold_b);} 
 
     if (button_c_State == 0) {cap_reading_c = Smooth_C(dirty_reading_c);} 
-       else {cap_reading_c = Smooth_Maintain_C(dirty_reading_c, 65, touch_threshold_c);} 
+       else {cap_reading_c = Smooth_Maintain_C(dirty_reading_c, (touch_threshold_c+10), touch_threshold_c);} 
 
     if (button_d_State == 0) {cap_reading_d = Smooth_D(dirty_reading_d);} 
-       else {cap_reading_d = Smooth_Maintain_D(dirty_reading_d, 65, touch_threshold_d);} 
+       else {cap_reading_d = Smooth_Maintain_D(dirty_reading_d, (touch_threshold_d+10), touch_threshold_d);} 
     
     //Hacky way to 'eliminate' bleeding. When, for example, A was touched, B was going up to ~60. 
     //This makes 60 the '0 value' (along with mapping functions below)
@@ -235,7 +230,7 @@ void loop()
     analogWrite(ledPin_C, brightness_C);
     analogWrite(ledPin_D, brightness_D);
     
-    debug(1); //if 1, print serial readings
+    debug(0); //if 1, print serial readings
        
 } //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop //end Loop 
 
@@ -317,7 +312,7 @@ int Smooth_Maintain_A(int dirty_reading, int hold_above_value, int touch_thresho
   // subtract the last reading:
   total_a = total_a - readings_a[readIndex_a];
   // read from the sensor:
-  if (dirty_reading > hold_above_value ) {  //if above this touched value, keep at that value when sensor released
+  if (dirty_reading > hold_above_value ) {  //if input is above this 'hold above' value, keep at that value when sensor released
   readings_a[readIndex_a] = dirty_reading;}
   //if sensor is being TOUCHED (dirty measures over 10) below the min_a_value, bring average down to 0
   else if (dirty_reading > touch_threshold) {  //if it's touched above the 'touch_threshold' but below the 'hold_above_value', let fall to 0
@@ -444,32 +439,32 @@ void debug(boolean debug_on){
     //Serial.print("Y Touch = ");
     //Serial.print(reading_y);              // print sensor Y
     //Serial.print("\t");
-    //Serial.print("Dirty A = ");
-    //Serial.print(dirty_reading_a);              // print sensor Y
-    //Serial.print("\t");
+    Serial.print("Dirty A = ");
+    Serial.print(dirty_reading_a);           
+    Serial.print("\t");
     //Serial.print("A Touch = ");
-    //Serial.print(cap_reading_a);              // print sensor A
+    //Serial.print(cap_reading_a);            
     //Serial.print("\t");   
     //Serial.print("Brightness A = ");
-    //Serial.print(brightness_A);               // print brightness
+    //Serial.print(brightness_A);              
     //Serial.print("\t");
-    //Serial.print("B Touch = ");
-    //Serial.print(cap_reading_b);              // print sensor B
-    //Serial.print("\t");
+    Serial.print("Dirty B = ");
+    Serial.print(dirty_reading_b);             
+    Serial.print("\t");
     //Serial.print("Brightness B = ");
     //Serial.print(brightness_B);
     //Serial.print("\t");
-    //Serial.print("Dirty C = ");
-    //Serial.print(dirty_reading_c);              
-    //Serial.print("\t");
+    Serial.print("Dirty C = ");
+    Serial.print(dirty_reading_c);              
+    Serial.print("\t");
     //Serial.print("C Touch = ");
     //Serial.print(cap_reading_c);   
     //Serial.print("\t");
     Serial.print("Dirty D = ");
     Serial.print(dirty_reading_d);             
     Serial.print("\t");
-    Serial.print("D Touch = ");
-    Serial.print(cap_reading_d);  
+    //Serial.print("D Touch = ");
+    //Serial.print(cap_reading_d);  
     //Serial.print("\t");
     Serial.println("\t");
 
