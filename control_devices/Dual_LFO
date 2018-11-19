@@ -1,0 +1,98 @@
+/* 
+ * Pin A0 = Speed 
+ * Pin A1 = Shape 
+ * 
+ * Pin 5 = PWM Out 
+ * Pin 13 = LED / Square Out 
+ */ 
+
+// Declaring some Variables. All are unsigned, since you don't really need negative going values for now.
+unsigned int delayTime;      
+unsigned int shape; 
+uint8_t tableStep; 
+
+uint8_t waveTable[4][256] ={{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    // These are your Wavetables. fill them with Values for your desired Waveshape. 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    // You could alco precalculate the Waveshape in Setup, see below 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,}, 
+                              
+                            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,      
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,}, 
+                              
+                            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,}, 
+                              
+                            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,      
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,}}; 
+                          
+void setup() {  
+  
+  for(int i=0; i<129; i++) {    // Precalculates a simple Tri-Wavetable in the first wavetable. 
+    waveTable[0][i]=i*2;        // Delete these 2 'for loops' if you have filled up your wavetables 
+    } 
+  for(int i=0; i<128; i++)  {   
+    waveTable[0][i+128]=256-i*2; 
+  } 
+  waveTable[0][128]=255;
+  
+  pinMode(5, OUTPUT);           // Sets Pin 5 as your PWM-Output 
+  pinMode(13, OUTPUT);          // And Pin 13 as LED for Tempo, you can also use this as a square-LFO 
+
+  Serial.begin(9600);
+} 
+
+
+
+void loop() { 
+
+  if(tableStep<128) {          // Turn LED on for first half of the cycle, indicate Tempo 
+    digitalWrite(13, HIGH); 
+  } 
+    else {                       // Turn it off for the second half 
+      digitalWrite (13, LOW); 
+    } 
+
+  
+  delayTime = (analogRead(A0)+1);  // Reads the voltage at pin A0 and stores a 10-Bit value in "delayTime". (between 0 and 1023). Adds 1 so "delayTime" cant be zero. 
+
+  shape = (analogRead(A1) >> 8);   // Reads the voltage at pin A1 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
+
+  
+  analogWrite(5, waveTable[shape][tableStep]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
+  delay(delayTime);                                         // Waits for the Amount of Milliseconds set by "delayTime". 
+                                                            // Fastest setting will cycle at ~4hz, slowest setting is somewhat over 4 minutes. 
+                                                            
+
+  tableStep++;      // Jumps to the next step. 
+  
+  /* tableStep is an 8-Bit unsigned integer, so it can only store a value between 0 and 255 and will 
+  automatically "overflow" and go back to 0 when it gets bigger than 255, which is the lenght of the lookup table. 
+   */ 
+
+  Serial.print("Table Step = ");
+  Serial.print(tableStep);
+  Serial.print("    LFO Value = ");
+  Serial.println(waveTable[shape][tableStep]);
+}
