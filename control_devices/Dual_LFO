@@ -8,8 +8,13 @@
 
 // Declaring some Variables. All are unsigned, since you don't really need negative going values for now.
 unsigned int delayTime;      
-unsigned int shape; 
-uint8_t tableStep; 
+unsigned int shapeA;
+unsigned int shapeB; 
+uint8_t tableStepA; //8-Bit unsigned integer, so it can only store a value between 0 and 255
+uint8_t tableStepB; //8-Bit unsigned integer, so it can only store a value between 0 and 255
+
+unsigned long time_A_previous = 0; //used to determine if LFO A should advance to next step
+unsigned long time_B_previous = 0; //used to determine if LFO A should advance to next step
 
 uint8_t waveTable[4][256] ={{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    // These are your Wavetables. fill them with Values for your desired Waveshape. 
                              0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    // You could alco precalculate the Waveshape in Setup, see below 
@@ -55,7 +60,7 @@ void setup() {
   for(int i=0; i<128; i++)  {   
     waveTable[0][i+128]=256-i*2; 
   } 
-  waveTable[0][128]=255;
+  waveTable[0][128]=255; //256 was overflowing to "0" for step 128 above
   
   pinMode(5, OUTPUT);           // Sets Pin 5 as your PWM-Output 
   pinMode(13, OUTPUT);          // And Pin 13 as LED for Tempo, you can also use this as a square-LFO 
@@ -67,32 +72,40 @@ void setup() {
 
 void loop() { 
 
-  if(tableStep<128) {          // Turn LED on for first half of the cycle, indicate Tempo 
+  /*
+  if(tableStepA<128) {          // Turn LED on for first half of the cycle, indicate Tempo 
     digitalWrite(13, HIGH); 
   } 
     else {                       // Turn it off for the second half 
       digitalWrite (13, LOW); 
     } 
+  */
+  //Get the current time
+  unsigned long current_time = millis();
 
+  //record & map pot values to control the rates of LFOs
+  int pot_value_A = analogRead(A0);
+  int LFO_A_rate = map(pot_value_A, 0, 1023, 1, 100); //1-100 microsecords
+  int pot_value_B = analogRead(A1);
+  int LFO_B_rate = map(pot_value_B, 0, 1023, 1, 100); //1-100 microsecords
   
-  delayTime = (analogRead(A0)+1);  // Reads the voltage at pin A0 and stores a 10-Bit value in "delayTime". (between 0 and 1023). Adds 1 so "delayTime" cant be zero. 
+  shapeA = (analogRead(A2) >> 8);   // Reads the voltage at pin A2 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
+  shapeB = (analogRead(A3) >> 8);   // Reads the voltage at pin A3 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
 
-  shape = (analogRead(A1) >> 8);   // Reads the voltage at pin A1 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
+  //LFO A
+  if((current_time - time_A_previous) > LFO_A_rate){ //once a certain amount of time passes, advance the table step and write the value
+    analogWrite(5, waveTable[shapeA][tableStepA]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
+    tableStepA++;      // Jumps to the next step for LFO A 
+    }
 
-  
-  analogWrite(5, waveTable[shape][tableStep]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
-  delay(delayTime);                                         // Waits for the Amount of Milliseconds set by "delayTime". 
-                                                            // Fastest setting will cycle at ~4hz, slowest setting is somewhat over 4 minutes. 
-                                                            
-
-  tableStep++;      // Jumps to the next step. 
-  
-  /* tableStep is an 8-Bit unsigned integer, so it can only store a value between 0 and 255 and will 
-  automatically "overflow" and go back to 0 when it gets bigger than 255, which is the lenght of the lookup table. 
-   */ 
+  //LFO B
+  if((current_time - time_A_previous) > LFO_B_rate){ //once a certain amount of time passes, advance the table step and write the value
+    analogWrite(5, waveTable[shapeB][tableStepB]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
+    tableStepB++;      // Jumps to the next step for LFO B 
+    }
 
   Serial.print("Table Step = ");
-  Serial.print(tableStep);
+  Serial.print(tableStepA);
   Serial.print("    LFO Value = ");
-  Serial.println(waveTable[shape][tableStep]);
+  Serial.println(waveTable[shapeA][tableStepA]);
 }
