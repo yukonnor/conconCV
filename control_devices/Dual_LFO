@@ -65,29 +65,29 @@ void setup() {
   pinMode(5, OUTPUT);           // Sets Pin 5 as your PWM-Output 
   pinMode(13, OUTPUT);          // And Pin 13 as LED for Tempo, you can also use this as a square-LFO 
 
-  Serial.begin(9600);
+  //Serial.begin(9600);
 } 
 
 
 
 void loop() { 
 
-  /*
+  
   if(tableStepA<128) {          // Turn LED on for first half of the cycle, indicate Tempo 
     digitalWrite(13, HIGH); 
   } 
     else {                       // Turn it off for the second half 
       digitalWrite (13, LOW); 
     } 
-  */
+   
   //Get the current time
-  unsigned long current_time = millis();
+  unsigned long current_timeß = millis();
 
   //record & map pot values to control the rates of LFOs
   int pot_value_A = analogRead(A0);
-  int LFO_A_rate = map(pot_value_A, 0, 1023, 1, 100); //1-100 microsecords
+  int LFO_A_rate = map(pot_value_A, 0, 1023, 1, 500); //1-100 microsecords
   int pot_value_B = analogRead(A1);
-  int LFO_B_rate = map(pot_value_B, 0, 1023, 1, 100); //1-100 microsecords
+  int LFO_B_rate = map(pot_value_B, 0, 1023, 1, 500); //1-100 microsecords
   
   shapeA = (analogRead(A2) >> 8);   // Reads the voltage at pin A2 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
   shapeB = (analogRead(A3) >> 8);   // Reads the voltage at pin A3 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
@@ -96,16 +96,24 @@ void loop() {
   if((current_time - time_A_previous) > LFO_A_rate){ //once a certain amount of time passes, advance the table step and write the value
     analogWrite(5, waveTable[shapeA][tableStepA]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
     tableStepA++;      // Jumps to the next step for LFO A 
+    
+    time_A_previous = current_time; 
+
+    //Serial.print("LFO A Rate = ");
+    //Serial.prßåint(LFO_A_rate);
+    //Serial.print("    Table Step = ");
+    //Serial.print(tableStepA);
+    //Serial.print("    LFO Value = ");
+    //Serial.println(waveTable[shapeA][tableStepA]); 
     }
 
   //LFO B
-  if((current_time - time_A_previous) > LFO_B_rate){ //once a certain amount of time passes, advance the table step and write the value
+  if((current_time - time_B_previous) > LFO_B_rate){ //once a certain amount of time passes, advance the table step and write the value
     analogWrite(5, waveTable[shapeB][tableStepB]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
     tableStepB++;      // Jumps to the next step for LFO B 
+
+    time_B_previous = current_time;
     }
 
-  Serial.print("Table Step = ");
-  Serial.print(tableStepA);
-  Serial.print("    LFO Value = ");
-  Serial.println(waveTable[shapeA][tableStepA]);
+
 }
