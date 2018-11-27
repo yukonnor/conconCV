@@ -6,34 +6,44 @@
  * Pin 13 = LED / Square Out 
  */ 
 
+const bool debug = 0;
+
 // Declaring some Variables. All are unsigned, since you don't really need negative going values for now.
 unsigned int delayTime;      
 unsigned int shapeA;
 unsigned int shapeB; 
 uint8_t tableStepA; //8-Bit unsigned integer, so it can only store a value between 0 and 255
+uint8_t tableStepAinv; //8-Bit unsigned integer, so it can only store a value between 0 and 255
 uint8_t tableStepB; //8-Bit unsigned integer, so it can only store a value between 0 and 255
+uint8_t tableStepBinv; //8-Bit unsigned integer, so it can only store a value between 0 and 255
+
+const int8_t lfo_a_pin = 11;
+const int8_t lfo_ainv_pin = 10;
+const int8_t lfo_b_pin = 6;
+const int8_t lfo_binv_pin = 5;
 
 unsigned long time_A_previous = 0; //used to determine if LFO A should advance to next step
 unsigned long time_B_previous = 0; //used to determine if LFO A should advance to next step
 
-uint8_t waveTable[4][256] ={{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    // These are your Wavetables. fill them with Values for your desired Waveshape. 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    // You could alco precalculate the Waveshape in Setup, see below 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,}, 
-                              
-                            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,      
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
-                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,}, 
-                              
+const uint8_t waveTable_255 [3][256] ={ //Sine - 255
+                            {128,131,134,137,140,143,146,149,152,156,159,162,165,168,171,
+                            174,176,179,182,185,188,191,193,196,199,201,204,206,209,211,
+                            213,216,218,220,222,224,226,228,230,232,234,235,237,239,240,
+                            242,243,244,246,247,248,249,250,251,251,252,253,253,254,254,
+                            254,255,255,255,255,255,255,255,254,254,253,253,252,252,251,
+                            250,249,248,247,246,245,244,242,241,239,238,236,235,233,231,
+                            229,227,225,223,221,219,217,215,212,210,207,205,202,200,197,
+                            195,192,189,186,184,181,178,175,172,169,166,163,160,157,154,
+                            151,148,145,142,138,135,132,129,126,123,120,117,113,110,107,
+                            104,101,98,95,92,89,86,83,80,77,74,71,69,66,63,
+                            60,58,55,53,50,48,45,43,40,38,36,34,32,30,28,
+                            26,24,22,20,19,17,16,14,13,11,10,9,8,7,6,
+                            5,4,3,3,2,2,1,1,0,0,0,0,0,0,0,
+                            1,1,1,2,2,3,4,4,5,6,7,8,9,11,12,
+                            13,15,16,18,20,21,23,25,27,29,31,33,35,37,39,
+                            42,44,46,49,51,54,56,59,62,64,67,70,73,76,79,
+                            81,84,87,90,93,96,99,103,106,109,112,115,118,121,124}, 
+                               
                             {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    
                              0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    
                              0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
@@ -51,21 +61,35 @@ uint8_t waveTable[4][256] ={{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,    // These are yo
                              0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
                              0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 
                              0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,}}; 
+
+const uint8_t waveTable_127 [128] = //Sine -127
+                           {128,134,140,146,153,159,165,171,177,182,188,194,199,204,209,
+                            214,218,223,227,230,234,237,240,243,246,248,250,251,253,254,
+                            255,255,255,255,254,253,252,251,249,247,245,242,239,236,232,
+                            229,225,220,216,211,206,201,196,191,185,180,174,168,162,156,
+                            149,143,137,131,124,118,112,106,99,93,87,81,75,70,64,
+                            59,54,49,44,39,35,30,26,23,19,16,13,10,8,6,
+                            4,3,2,1,0,0,0,0,1,2,4,5,7,9,12,
+                            15,18,21,25,28,32,37,41,46,51,56,61,67,73,78,
+                            84,90,96,102,109,115,121,128}; 
                           
 void setup() {  
   
-  for(int i=0; i<129; i++) {    // Precalculates a simple Tri-Wavetable in the first wavetable. 
-    waveTable[0][i]=i*2;        // Delete these 2 'for loops' if you have filled up your wavetables 
-    } 
-  for(int i=0; i<128; i++)  {   
-    waveTable[0][i+128]=256-i*2; 
-  } 
-  waveTable[0][128]=255; //256 was overflowing to "0" for step 128 above
+  //for(int i=0; i<129; i++) {    // Precalculates a simple Tri-Wavetable in the first wavetable. 
+  //  waveTable[0][i]=i*2;        // Delete these 2 'for loops' if you have filled up your wavetables 
+  //  } 
+  //for(int i=0; i<128; i++)  {   
+  //  waveTable[0][i+128]=256-i*2; 
+  //} 
+  //waveTable[0][128]=255; //256 was overflowing to "0" for step 128 above
   
-  pinMode(5, OUTPUT);           // Sets Pin 5 as your PWM-Output 
-  pinMode(13, OUTPUT);          // And Pin 13 as LED for Tempo, you can also use this as a square-LFO 
+  pinMode(lfo_a_pin, OUTPUT);
+  pinMode(lfo_ainv_pin, OUTPUT);  
+  pinMode(lfo_b_pin, OUTPUT);  
+  pinMode(lfo_binv_pin, OUTPUT);      
+  pinMode(13, OUTPUT);          // Pin 13 as LED for Tempo, you can also use this as a square-LFO 
 
-  //Serial.begin(9600);
+  if(debug == 1){Serial.begin(9600);}
 } 
 
 
@@ -81,7 +105,7 @@ void loop() {
     } 
    
   //Get the current time
-  unsigned long current_timeß = millis();
+  unsigned long current_time = millis();
 
   //record & map pot values to control the rates of LFOs
   int pot_value_A = analogRead(A0);
@@ -89,30 +113,53 @@ void loop() {
   int pot_value_B = analogRead(A1);
   int LFO_B_rate = map(pot_value_B, 0, 1023, 1, 500); //1-100 microsecords
   
-  shapeA = (analogRead(A2) >> 8);   // Reads the voltage at pin A2 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
-  shapeB = (analogRead(A3) >> 8);   // Reads the voltage at pin A3 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
+  shapeA = 0; //(analogRead(A2) >> 8);   // Reads the voltage at pin A2 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
+  shapeB = 0; //(analogRead(A3) >> 8);   // Reads the voltage at pin A3 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
 
   //LFO A
-  if((current_time - time_A_previous) > LFO_A_rate){ //once a certain amount of time passes, advance the table step and write the value
-    analogWrite(5, waveTable[shapeA][tableStepA]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
+  if((current_time - time_A_previous) > LFO_A_rate){              //once a certain amount of time passes, advance the table step and write the value
+    tableStepAinv = tableStepA + 127;                             //set LFO A Inverse to be at 180 deg phase (half of table length)
+    analogWrite(lfo_a_pin, waveTable_255[shapeA][tableStepA]);    //writes the value at the current step to Pin A (PWM) 
+    analogWrite(lfo_ainv_pin, waveTable_255[shapeA][(tableStepAinv)]);    //writes at 180 deg phase of A to Pin A Inverse
     tableStepA++;      // Jumps to the next step for LFO A 
     
     time_A_previous = current_time; 
 
-    //Serial.print("LFO A Rate = ");
-    //Serial.prßåint(LFO_A_rate);
-    //Serial.print("    Table Step = ");
-    //Serial.print(tableStepA);
-    //Serial.print("    LFO Value = ");
-    //Serial.println(waveTable[shapeA][tableStepA]); 
+    if(debug == 1){
+      Serial.print("LFO A Rate = ");
+      Serial.print(LFO_A_rate);
+      Serial.print("    Table Step = ");
+      Serial.print(tableStepA);
+      Serial.print("    Table Step Ainv= ");
+      Serial.print(tableStepAinv);
+      Serial.print("    LFO Value = ");
+      Serial.print (waveTable_255[shapeA][tableStepA]);
+      } 
     }
 
   //LFO B
   if((current_time - time_B_previous) > LFO_B_rate){ //once a certain amount of time passes, advance the table step and write the value
-    analogWrite(5, waveTable[shapeB][tableStepB]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
-    tableStepB++;      // Jumps to the next step for LFO B 
+    tableStepBinv = tableStepB + 63;   //need to do some math here as inv wont 'roll over' at 127 (it will at 255)
+    analogWrite(lfo_b_pin, waveTable_127[tableStepB]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
+    analogWrite(lfo_binv_pin, waveTable_127[tableStepBinv]);       
+    
+    if(tableStepB == 127) {
+                 tableStepB = 0; //if it reaches its max of 127, reset to 0
+                         }
+       else {
+             tableStepB++;  // Jumps to the next step for LFO B 
+             }      
 
     time_B_previous = current_time;
+
+    if(debug == 1){
+      Serial.print("       LFO B Rate = ");
+      Serial.print(LFO_B_rate);
+      Serial.print("    Table Step = ");
+      Serial.print(tableStepB);
+      Serial.print("    LFO Value = ");
+      Serial.println(waveTable_127[tableStepB]);
+      } 
     }
 
 
