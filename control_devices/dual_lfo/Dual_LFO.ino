@@ -1,4 +1,6 @@
 /* 
+ * Version 0.3
+ * 
  * Pin A0 = Speed 
  * Pin A1 = Shape 
  * 
@@ -35,8 +37,10 @@ const int8_t lfo_b_offset_pin = 5;
 unsigned long time_A_previous = 0; //used to determine if LFO A should advance to next step
 unsigned long time_B_previous = 0; //used to determine if LFO A should advance to next step
 
-unsigned char pot_value_A;
-unsigned char pot_value_B;
+unsigned char pot_1;
+unsigned char pot_2;
+unsigned char pot_3;
+unsigned char pot_4;
 
 //Define Digial Button Pins
 const int button1Pin = 13;
@@ -46,6 +50,11 @@ int button2 = 0;
 
 short LFO_A_rate;
 short LFO_B_rate;
+
+const short num_wavetables = 3 //number of wavetables to cycle through
+
+unsigned long current_time;
+const int debouce = 200;
                 
 void setup() {  
   
@@ -73,57 +82,52 @@ void setup() {
 
 
 void loop() { 
-
   
-  if(tableStepA<128) {          // Turn LED on for first half of the cycle, indicate Tempo 
-    digitalWrite(13, HIGH); 
-  } 
-    else {                       // Turn it off for the second half 
-      digitalWrite (13, LOW); 
-    } 
-   
   //Get the current time
-  unsigned long current_time = millis();
+  current_time = millis();
 
-  //Set the offsets (testing only - will have pot set offsets eventually)
-  offset_a = 127; //127 = 180 deg offset of 255 wavetable
-  offset_b = 63; //127 = 180 deg offset of 255 wavetable
-
-  
   //record & map pot values to control the rates of LFOs
-  pot_value_A = analogRead(A0);
-  LFO_A_rate = map(pot_value_A, 0, 1023, 1, 200); //1-100 microsecords
-  pot_value_B = analogRead(A1);
-  LFO_B_rate = map(pot_value_B, 0, 1023, 1, 200); //1-100 microsecords
+  pot_1 = analogRead(A0);
+    LFO_A_rate = map(pot_1, 0, 1023, 1, 200); // 1-100 microsecords
+  pot_2= analogRead(A1);
+    LFO_B_rate = map(pot_2, 0, 1023, 1, 200); // 1-100 microsecords
+  pot_3 = analogRead(A3);
+    offset_a = map(pot_3, 0, 1023, 0, 200);   // 0-200 step offset. 127 = 180 deg offset of 255 wavetable 
+  pot_4= analogRead(A4);
+    offset_b = map(pot_4, 0, 1023, 0, 200);   // 0-200 step offset. 
 
-  //Read button values:
-  //NOTE: Button press == LOW
+  // Set the offsets for testing:
+  // offset_a = 127; //127 = 180 deg offset of 255 wavetable
+  // offset_b = 63; //127 = 180 deg offset of 255 wavetable
+  
+  //Read button values: (NOTE: Button press == LOW)
   int buttonRead1 = digitalRead(button1Pin);
   int buttonRead2 = digitalRead(button2Pin);
   
-  //if shape buttons pressed, change shape (1,2,3)
-  if (buttonRead1 == LOW) {
-     button1 = button1 + 1;
-     if(button1==3)
-        button1 = 0;
-  }
-
-  if (buttonRead2 == LOW) {
-     button2 = button2 + 1;
-     if(button2==3)
-        button2 = 0;
-  }
+  // if shape button 1 pressed, cycle through wavetable shapes for LFO A
+  if (buttonRead1 == LOW &&  millis() - current_time > debounce) {
+      shapeA++;
+      if(shapeA==(num_wavetables-1)) //once at the last wavetable, start back at the beginning
+        shapeA = 0;
+      current_time = millis(); //check back on this.. may not need? 
+   }
   
-  shapeA = 0; //(analogRead(A2) >> 8);   // Reads the voltage at pin A2 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
-  shapeB = 0; //(analogRead(A3) >> 8);   // Reads the voltage at pin A3 and divides by 256 to get a Value between 0 and 3 to select the waveshape. 
-
+  // if shape button 2 pressed, cycle through wavetable shapes for LFO B
+  if (buttonRead2 == LOW &&  millis() - current_time > debounce) {
+      shapeB++;
+      if(shapeB==(num_wavetables-1)) //once at the last wavetable, start back at the beginning
+        shapeB = 0;
+      current_time = millis(); //check back on this.. may not need? 
+   }
+  
   //LFO A
   if((current_time - time_A_previous) > LFO_A_rate){                    //once a certain amount of time passes, advance the table step and write the value
     tableStepA_offset = tableStepA + offset_a;                          //set LFO A Offset to be at 180 deg phase (half of table length)
+    
     analogWrite(lfo_a_pin, waveTable_255[shapeA][tableStepA]);          //writes the value at the current step to Pin A (PWM) 
     analogWrite(lfo_a_offset_pin, waveTable_255[shapeA][tableStepA_offset]);  //writes at 180 deg phase of A to Pin A Inverse
-    tableStepA++;                                                               // Jumps to the next step for LFO A 
     
+    tableStepA++;                                                               // Jumps to the next step for LFO A
     time_A_previous = current_time; 
 
     if(debug == 1){
@@ -139,10 +143,11 @@ void loop() {
   //LFO B
   if((current_time - time_B_previous) > LFO_B_rate){ //once a certain amount of time passes, advance the table step and write the value
     tableStepB_offset = tableStepB + offset_b;  
+    
     analogWrite(lfo_b_pin, waveTable_255[shapeB][tableStepB]);              // Writes the value at the current step in the table to Pin 5 as PWM-Signal.  
     analogWrite(lfo_b_offset_pin, waveTable_255[shapeB][tableStepB_offset]);       
-    tableStepB++;  
     
+    tableStepB++;  
     time_B_previous = current_time;
 
     if(debug == 1){
