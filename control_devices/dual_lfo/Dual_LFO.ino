@@ -1,5 +1,5 @@
 /* 
- * Version 0.3
+ * Version 0.4
  * 
  * Pin A0 = Speed 
  * Pin A1 = Shape 
@@ -45,16 +45,14 @@ unsigned char pot_4;
 //Define Digial Button Pins
 const int button1Pin = 13;
 const int button2Pin = 12;
-int button1 = 0;
-int button2 = 0;
 
 short LFO_A_rate;
 short LFO_B_rate;
 
-const short num_wavetables = 3 //number of wavetables to cycle through
+const short num_wavetables = 3; //number of wavetables to cycle through
 
 unsigned long current_time;
-const int debouce = 200;
+const int debounce = 200;
                 
 void setup() {  
   
@@ -76,6 +74,10 @@ void setup() {
   pinMode(button1Pin, INPUT_PULLUP);
   pinMode(button2Pin, INPUT_PULLUP);
 
+  //Set initial wavetable shapes
+  shapeA = 0;
+  shapeB = 0;
+
   if(debug == 1){Serial.begin(9600);}
 } 
 
@@ -91,9 +93,9 @@ void loop() {
     LFO_A_rate = map(pot_1, 0, 1023, 1, 200); // 1-100 microsecords
   pot_2= analogRead(A1);
     LFO_B_rate = map(pot_2, 0, 1023, 1, 200); // 1-100 microsecords
-  pot_3 = analogRead(A3);
+  pot_3 = analogRead(A2);
     offset_a = map(pot_3, 0, 1023, 0, 200);   // 0-200 step offset. 127 = 180 deg offset of 255 wavetable 
-  pot_4= analogRead(A4);
+  pot_4= analogRead(A3);
     offset_b = map(pot_4, 0, 1023, 0, 200);   // 0-200 step offset. 
 
   // Set the offsets for testing:
@@ -135,7 +137,9 @@ void loop() {
       //Serial.print(LFO_A_rate);
       //Serial.print("    Table Step = ");
       //Serial.print(tableStepA);
-      //Serial.print("    LFO Value = ");
+      //Serial.print("    Wavetable Shape A = ");
+      //Serial.print(shapeA);
+      //Serial.print("    LFO A Value = ");
       //Serial.print(waveTable_255[shapeA][tableStepA]);
       } 
     }
@@ -160,6 +164,5 @@ void loop() {
       //Serial.println(" ");
       } 
     }
-
 
 }
