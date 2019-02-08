@@ -1,5 +1,5 @@
 /* 
- * Version 0.4
+ * Version 0.5
  * 
  * Pin A0 = Speed 
  * Pin A1 = Shape 
@@ -8,9 +8,7 @@
  * Pin 13 = LED / Square Out 
  * 
  * TODO:
- * -learn how to put wavetables in memory
- * -add pots to control to offset
- * -add buttons to control LFO A and LFO B wavetable shapes (1,2,3)
+ * - Add more wavetables!
  */ 
 #include "wavetables.h"
 
@@ -52,7 +50,8 @@ short LFO_B_rate;
 const short num_wavetables = 3; //number of wavetables to cycle through
 
 unsigned long current_time;
-const int debounce = 200;
+const int debounce = 200;   //20 for debug - 200 for production
+unsigned long last_debounce_time;
                 
 void setup() {  
   
@@ -103,23 +102,25 @@ void loop() {
   // offset_b = 63; //127 = 180 deg offset of 255 wavetable
   
   //Read button values: (NOTE: Button press == LOW)
-  int buttonRead1 = digitalRead(button1Pin);
-  int buttonRead2 = digitalRead(button2Pin);
+  bool buttonRead1 = digitalRead(button1Pin);
+  bool buttonRead2 = digitalRead(button2Pin);
+  Serial.print("    Button 1 State = ");
+  Serial.print(buttonRead1);
   
   // if shape button 1 pressed, cycle through wavetable shapes for LFO A
-  if (buttonRead1 == LOW &&  millis() - current_time > debounce) {
-      shapeA++;
-      if(shapeA==(num_wavetables-1)) //once at the last wavetable, start back at the beginning
+  if (buttonRead1 == LOW &&  millis() - last_debounce_time > debounce) {
+      shapeA = shapeA + 1;
+      if(shapeA==(num_wavetables)) //once at the last wavetable, start back at the beginning
         shapeA = 0;
-      current_time = millis(); //check back on this.. may not need? 
+      last_debounce_time = millis(); //check back on this.. may not need? 
    }
   
   // if shape button 2 pressed, cycle through wavetable shapes for LFO B
-  if (buttonRead2 == LOW &&  millis() - current_time > debounce) {
+  if (buttonRead2 == LOW &&  millis() - last_debounce_time > debounce) {
       shapeB++;
-      if(shapeB==(num_wavetables-1)) //once at the last wavetable, start back at the beginning
+      if(shapeB==(num_wavetables)) //once at the last wavetable, start back at the beginning
         shapeB = 0;
-      current_time = millis(); //check back on this.. may not need? 
+      last_debounce_time = millis(); //check back on this.. may not need? 
    }
   
   //LFO A
@@ -137,10 +138,10 @@ void loop() {
       //Serial.print(LFO_A_rate);
       //Serial.print("    Table Step = ");
       //Serial.print(tableStepA);
-      //Serial.print("    Wavetable Shape A = ");
-      //Serial.print(shapeA);
-      //Serial.print("    LFO A Value = ");
-      //Serial.print(waveTable_255[shapeA][tableStepA]);
+      Serial.print("    Wavetable Shape A = ");
+      Serial.print(shapeA);
+      Serial.print("    LFO A Value = ");
+      Serial.print(waveTable_255[shapeA][tableStepA]);
       } 
     }
 
@@ -164,5 +165,6 @@ void loop() {
       //Serial.println(" ");
       } 
     }
+
 
 }
