@@ -1,5 +1,5 @@
 /* 
- * Version 0.5
+ * Version 0.6
  * 
  * Pin A0 = Speed 
  * Pin A1 = Shape 
@@ -7,8 +7,6 @@
  * Pin 5 = PWM Out 
  * Pin 13 = LED / Square Out 
  * 
- * TODO:
- * - Add more wavetables!
  */ 
 #include "wavetables.h"
 
@@ -47,7 +45,7 @@ const int button2Pin = 12;
 short LFO_A_rate;
 short LFO_B_rate;
 
-const short num_wavetables = 3; //number of wavetables to cycle through
+const short num_wavetables = 4; //number of wavetables to cycle through
 
 unsigned long current_time;
 const int debounce = 200;   //20 for debug - 200 for production
