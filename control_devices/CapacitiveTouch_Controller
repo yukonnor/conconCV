@@ -11,12 +11,15 @@
  * 
  * Gates (X & Y):
  * - Sets external CV: 0V or 4.8V (on-off) based on whether or not finger is touching pad
+ *
+ * RESOURCES:
+ * https://www.pjrc.com/teensy/td_libs_CapacitiveSensor.html
+ * https://playground.arduino.cc/Main/CapacitiveSensor/
  * 
  * TODO:
  * - debounce push buttons 
- * - ergonimics
- * - solder protoboard of what's currently breadboarded
- * - figue out case design - copper foil on wood then laquer over
+ * - pcb
+ * - pullup all buttons
  * 
  * 
  * NOTES ABOUT CapacitiveSensor:
